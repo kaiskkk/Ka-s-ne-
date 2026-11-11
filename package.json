@@ -1,0 +1,19 @@
+{
+  "name": "elementa",
+  "version": "0.1.0",
+  "description": "ÉLÉMENTA — brawler 3v3 élémentaire vu de dessus (prototype web mobile, Phaser 3).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
