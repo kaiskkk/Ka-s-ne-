@@ -38,9 +38,10 @@ function serviceWorker() {
         hash.update(f);
         hash.update(readFileSync(join(outDir, f)));
       }
+      const template = readFileSync('src/pwa/sw.template.js', 'utf8');
+      hash.update(template); // un changement du service worker lui-même renouvelle aussi le cache
       const version = hash.digest('hex').slice(0, 12);
       const urls = files.map((f) => (f === 'index.html' ? '/' : `/${f}`));
-      const template = readFileSync('src/pwa/sw.template.js', 'utf8');
       const sw = template.replace('__VERSION__', version).replace('__PRECACHE__', JSON.stringify(urls, null, 2));
       writeFileSync(join(outDir, 'sw.js'), sw);
       console.log(`\n✓ service worker : ${urls.length} fichiers en cache, version ${version}`);

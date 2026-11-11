@@ -53,14 +53,16 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.match('/', { ignoreSearch: true }).then((hit) => hit || Response.error())),
+        .catch(() => caches.match('/', { ignoreSearch: true, ignoreVary: true }).then((hit) => hit || Response.error())),
     );
     return;
   }
 
-  // Fichiers du jeu : cache d'abord, réseau sinon
+  // Fichiers du jeu : cache d'abord, réseau sinon.
+  // ignoreVary : certains serveurs ajoutent « Vary: Origin », ce qui ferait
+  // échouer la recherche en cache des scripts chargés en mode module.
   event.respondWith(
-    caches.match(req).then(
+    caches.match(req, { ignoreVary: true }).then(
       (hit) =>
         hit ||
         fetch(req).then((res) => {

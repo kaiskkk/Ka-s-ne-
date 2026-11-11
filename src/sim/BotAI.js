@@ -63,6 +63,8 @@ export class BotBrain {
     this.lastY = fighter.y;
     this.nudgeT = 0;
     this.nudgeAng = 0;
+    this.refuge = null; // point de repli retenu
+    this.atRefuge = false;
 
     // Tir
     this.aimErr = 0;
@@ -82,6 +84,8 @@ export class BotBrain {
       this.path = null;
       this.target = null;
       this.fleeing = false;
+      this.atRefuge = false;
+      this.refuge = null;
       return;
     }
     this.thinkT -= dt;
@@ -180,6 +184,7 @@ export class BotBrain {
       if (ally) goal = { type: 'follow', ally: ally.id, keep: 150 };
     }
     if (!goal) goal = { type: 'roam' };
+    if (goal.type !== 'flee') this.atRefuge = false;
     this.goal = goal;
 
     this.decideSuper();
@@ -293,9 +298,7 @@ export class BotBrain {
     } else if (g.type === 'collect') {
       [mx, my] = this.steerTo(g.x, g.y);
     } else if (g.type === 'flee') {
-      const p = this.fleePoint();
-      if (Math.hypot(p.x - f.x, p.y - f.y) > 90) [mx, my] = this.steerTo(p.x, p.y);
-      else if (this.nearest) [mx, my] = this.fightMove(this.nearest);
+      [mx, my] = this.fleeMove();
     } else if (g.type === 'follow') {
       const ally = m.fighters[g.ally];
       if (ally && ally.alive && distObj(f, ally) > g.keep) [mx, my] = this.steerTo(ally.x, ally.y);
@@ -378,6 +381,40 @@ export class BotBrain {
     }
     f.input.mx = mx;
     f.input.my = my;
+  }
+
+  /**
+   * Repli : courir vers le point de repli puis, une fois arrivé, rester dans
+   * les parages en esquivant (pas d'aller-retour entre fuite et combat).
+   */
+  fleeMove() {
+    const { f, m } = this;
+    const p = this.fleePoint();
+    const dx = p.x - f.x;
+    const dy = p.y - f.y;
+    const d = Math.hypot(dx, dy);
+    // Hystérésis : « arrivé » à moins de 70 px, on ne repart qu'au-delà de 150 px
+    if (d < 70) this.atRefuge = true;
+    else if (d > 150) this.atRefuge = false;
+    if (!this.atRefuge) return this.steerTo(p.x, p.y);
+
+    const e = this.nearest;
+    if (!e || this.nearestD > 650) return [0, 0]; // tranquille : on récupère sur place
+    // Esquive : pas de côté par rapport à l'ennemi, en restant près du refuge
+    if (this.strafeT <= 0) {
+      this.strafe *= -1;
+      this.strafeT = m.rng.range(0.6, 1.6);
+    }
+    const ed = this.nearestD || 1;
+    const nx = (e.x - f.x) / ed;
+    const ny = (e.y - f.y) / ed;
+    let mx = -ny * this.strafe * 0.8;
+    let my = nx * this.strafe * 0.8;
+    if (d > 45) {
+      mx += (dx / d) * 0.7;
+      my += (dy / d) * 0.7;
+    }
+    return [mx, my];
   }
 
   /** Déplacement en combat : s'approcher, garder sa distance préférée, tourner autour. */
@@ -522,17 +559,23 @@ export class BotBrain {
   fleePoint() {
     const { f, m } = this;
     const spawns = m.arena.spawns[f.team];
+    const scoreOf = (s) => {
+      let minD = 2000;
+      for (const e of this.seen) minD = Math.min(minD, Math.hypot(e.x - s.x, e.y - s.y));
+      return minD - Math.hypot(f.x - s.x, f.y - s.y) * 0.3;
+    };
     let best = spawns[0];
     let bestScore = -Infinity;
     for (const s of spawns) {
-      let minD = 2000;
-      for (const e of this.seen) minD = Math.min(minD, Math.hypot(e.x - s.x, e.y - s.y));
-      const score = minD - Math.hypot(f.x - s.x, f.y - s.y) * 0.3;
+      const score = scoreOf(s);
       if (score > bestScore) {
         bestScore = score;
         best = s;
       }
     }
+    // On garde le refuge actuel tant qu'un autre n'est pas nettement meilleur
+    if (this.refuge && spawns.includes(this.refuge) && scoreOf(this.refuge) > bestScore - 220) return this.refuge;
+    this.refuge = best;
     return best;
   }
 

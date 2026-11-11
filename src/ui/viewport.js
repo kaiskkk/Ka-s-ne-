@@ -76,8 +76,11 @@ export function installViewport(game) {
     const key = `${width}x${height}@${dpr}|${safe.top},${safe.right},${safe.bottom},${safe.left}`;
     if (key === lastKey) return;
     lastKey = key;
-    game.scale.setZoom(1 / dpr);
+    // Ordre important : resize() fixe la taille interne du canvas, puis setZoom()
+    // recalcule TOUJOURS sa taille CSS et la conversion des coordonnées tactiles
+    // (dans l'autre ordre, la taille CSS restait l'ancienne sur les écrans non-Retina).
     game.scale.resize(Math.round(width * dpr), Math.round(height * dpr));
+    game.scale.setZoom(1 / dpr);
     game.events.emit('viewport-changed', viewport);
   };
 
