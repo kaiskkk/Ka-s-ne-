@@ -19,10 +19,13 @@ import { findPath } from './pathfinding.js';
 
 /** Niveaux de difficulté des bots. */
 export const BOT_SKILL = {
-  facile: { aimError: 0.3, reaction: 0.7, shotDelay: [0.7, 1.4], lead: 0.4, thinkEvery: 0.35, superChance: 0.25 },
+  facile: { aimError: 0.24, reaction: 0.58, shotDelay: [0.6, 1.2], lead: 0.5, thinkEvery: 0.3, superChance: 0.3 },
   normal: { aimError: 0.17, reaction: 0.4, shotDelay: [0.45, 1.0], lead: 0.7, thinkEvery: 0.25, superChance: 0.45 },
   difficile: { aimError: 0.08, reaction: 0.22, shotDelay: [0.3, 0.7], lead: 0.95, thinkEvery: 0.18, superChance: 0.7 },
 };
+
+/** Niveau proposé par défaut au joueur (réglable dans le menu). */
+export const DEFAULT_DIFFICULTY = 'facile';
 
 export const DIFFICULTIES = [
   { id: 'facile', name: 'Facile' },

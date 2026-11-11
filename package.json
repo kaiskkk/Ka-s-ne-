@@ -4,6 +4,9 @@
   "description": "ÉLÉMENTA — brawler 3v3 élémentaire vu de dessus (prototype web mobile, Phaser 3).",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",

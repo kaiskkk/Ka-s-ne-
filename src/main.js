@@ -32,6 +32,7 @@ function start() {
       width: Math.round(viewport.width * viewport.dpr),
       height: Math.round(viewport.height * viewport.dpr),
       zoom: 1 / viewport.dpr,
+      fullscreenTarget: 'game',
     },
     input: {
       activePointers: 4, // multi-touch : déplacement + visée + boutons en même temps
@@ -71,7 +72,7 @@ function start() {
   if (params.has('play')) {
     game.registry.set('autostart', {
       charId: params.get('play') || 'braz',
-      difficulty: params.get('difficulty') || 'normal',
+      difficulty: params.get('difficulty') || undefined,
       seed: params.has('seed') ? Number(params.get('seed')) : undefined,
     });
   }

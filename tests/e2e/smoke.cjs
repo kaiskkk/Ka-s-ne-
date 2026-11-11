@@ -74,14 +74,21 @@ async function main() {
   assert.equal(boot.css, '844px');
   step(`menu affiché (${boot.webgl ? 'WebGL' : 'Canvas'}, canvas ${boot.canvas.join('×')})`);
 
+  // Premier lancement : le panneau « Comment jouer » est ouvert, un tap le ferme
+  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').helpOpen), true);
+  await page.touchscreen.tap(422, 200);
+  await sleep(300);
+  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').helpOpen), false);
+  step('aide « Comment jouer » au premier lancement');
+
   // Choisir Alizé (5ᵉ carte) puis JOUER, au doigt
   let b = await buttons('Menu');
-  assert.equal(b.length, 10, '3 difficultés + son + 5 personnages + JOUER');
-  await page.touchscreen.tap(b[8].x, b[8].y);
+  assert.equal(b.length, 11, '3 difficultés + son + aide + 5 personnages + JOUER');
+  await page.touchscreen.tap(b[9].x, b[9].y);
   await sleep(300);
   assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').selected), 'alize');
   b = await buttons('Menu');
-  await page.touchscreen.tap(b[9].x, b[9].y);
+  await page.touchscreen.tap(b[10].x, b[10].y);
   await sleep(600);
   assert.deepEqual(await scenes(), ['Game', 'Hud']);
   assert.equal((await player()).charId, 'alize');

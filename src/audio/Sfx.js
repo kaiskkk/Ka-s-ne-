@@ -38,7 +38,8 @@ class Sfx {
         const data = this.noiseBuffer.getChannelData(0);
         for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
       }
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      // 'suspended' au démarrage, 'interrupted' sur iOS après un appel ou une mise en veille
+      if (this.ctx.state !== 'running') this.ctx.resume();
     } catch {
       this.ctx = null;
     }

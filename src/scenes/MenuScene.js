@@ -7,9 +7,10 @@
 import * as Phaser from 'phaser';
 import { sfx } from '../audio/Sfx.js';
 import { CHARACTERS, CHARACTER_IDS, STAT_MAX } from '../config/characters.js';
+import { TILE } from '../config/constants.js';
 import { ELEMENTS } from '../config/elements.js';
 import { fusionsFor } from '../config/fusions.js';
-import { DIFFICULTIES } from '../sim/BotAI.js';
+import { DEFAULT_DIFFICULTY, DIFFICULTIES } from '../sim/BotAI.js';
 import { Buttons } from '../ui/Buttons.js';
 import { drawCharacter } from '../ui/shapes.js';
 import { COLORS, addText, hex, mix, textResFor } from '../ui/theme.js';
@@ -42,8 +43,11 @@ export class MenuScene extends Phaser.Scene {
   create() {
     this.selected = load('elementa.char', 'braz');
     if (!CHARACTERS[this.selected]) this.selected = 'braz';
-    this.difficulty = load('elementa.difficulty', 'normal');
-    if (!DIFFICULTIES.some((d) => d.id === this.difficulty)) this.difficulty = 'normal';
+    this.difficulty = load('elementa.difficulty', DEFAULT_DIFFICULTY);
+    if (!DIFFICULTIES.some((d) => d.id === this.difficulty)) this.difficulty = DEFAULT_DIFFICULTY;
+
+    // L'aide s'ouvre toute seule au tout premier lancement
+    this.helpOpen = load('elementa.helpSeen', '') !== '1';
 
     this.buttons = new Buttons(this);
     this.rebuild();
@@ -66,6 +70,7 @@ export class MenuScene extends Phaser.Scene {
     this.drawDetails();
     this.drawFusions();
     this.drawPlay();
+    if (this.helpOpen) this.drawHelp();
   }
 
   drawBackground() {
@@ -97,12 +102,11 @@ export class MenuScene extends Phaser.Scene {
     let tip = 'Brawler élémentaire 3 contre 3';
     if (isIOS() && !isStandalone()) tip = 'Plein écran : bouton Partager → « Sur l’écran d’accueil »';
     else if (!isTouchDevice()) tip = 'Clavier : ZQSD ou flèches · clic = tirer · Espace = super · F = fusion';
-    addText(this, x + 12, 22, tip, { size: 10, color: '#9aa6c8', bold: false, oy: 0.5, wrap: 478 - x - 12 });
+    addText(this, x + 10, 22, tip, { size: 10, color: '#9aa6c8', bold: false, oy: 0.5, wrap: 436 - x });
 
     // Difficulté des bots adverses
-    const dw = 66;
-    const dx = 532;
-    addText(this, dx - 8, 22, 'Bots :', { size: 11, color: '#9aa6c8', ox: 1, oy: 0.5 });
+    const dw = 62;
+    const dx = 448;
     DIFFICULTIES.forEach((d, i) => {
       const bx = dx + i * (dw + 4);
       const on = d.id === this.difficulty;
@@ -124,7 +128,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     // Son
-    const sx = 750;
+    const sx = 652;
     const g = this.add.graphics();
     g.fillStyle(COLORS.panelLight, 1);
     g.fillRoundedRect(sx, 9, 68, 26, 9);
@@ -136,6 +140,91 @@ export class MenuScene extends Phaser.Scene {
       h: 36,
       onTap: () => {
         sfx.toggle();
+        this.rebuild();
+      },
+    });
+
+    // Aide
+    const hx = 728;
+    g.fillStyle(COLORS.panelLight, 1);
+    g.fillRoundedRect(hx, 9, 88, 26, 9);
+    g.lineStyle(1.5, COLORS.gold, 0.8);
+    g.strokeRoundedRect(hx, 9, 88, 26, 9);
+    addText(this, hx + 44, 22, 'Comment jouer', { size: 11, ox: 0.5, oy: 0.5, color: hex(COLORS.gold) });
+    this.buttons.add({
+      x: hx,
+      y: 4,
+      w: 88,
+      h: 36,
+      onTap: () => {
+        this.helpOpen = true;
+        this.rebuild();
+      },
+    });
+  }
+
+  /** Panneau « Comment jouer » par-dessus le menu. */
+  drawHelp() {
+    this.buttons.clear(); // les boutons du menu sont inactifs tant que l'aide est ouverte
+    const D = 100;
+    const g = this.add.graphics().setDepth(D);
+    g.fillStyle(0x05070f, 0.82);
+    g.fillRect(-3000, -3000, 6844, 6390);
+    const x = 72;
+    const y = 16;
+    const w = 700;
+    const h = 358;
+    g.fillStyle(COLORS.panel, 1);
+    g.fillRoundedRect(x, y, w, h, 18);
+    g.lineStyle(2, COLORS.gold, 0.9);
+    g.strokeRoundedRect(x, y, w, h, 18);
+    addText(this, REF_W / 2, y + 24, 'COMMENT JOUER', { size: 20, ox: 0.5, oy: 0.5, color: hex(COLORS.gold), depth: D });
+
+    const touch = isTouchDevice();
+    const lines = [
+      [
+        'COMMANDES',
+        touch
+          ? 'Joystick gauche : se déplacer. Joystick droit : viser, puis relâcher pour tirer (un simple tap = tir automatique).'
+          : 'ZQSD ou flèches : se déplacer. Souris : viser, clic pour tirer. Espace : super. F : fusion. Échap : pause.',
+        0xffffff,
+      ],
+      ['SUPER', 'Il se charge en touchant les ennemis. Tap sur le bouton = visée automatique, glisser = viser soi-même.', COLORS.super],
+      [
+        'FUSION',
+        'Ton super ET celui d’un allié sont prêts, et vous êtes proches ? Le bouton FUSION s’allume : un combo qui dépend de vos deux éléments.',
+        COLORS.fusion,
+      ],
+      [
+        'CRISTAUX',
+        'Ramasse-les au centre : chaque cristal porté donne +10 % de dégâts et charge ton super, mais te rend visible de tous (et tu lâches tout en mourant). L’équipe qui porte les 3 pendant 15 s gagne.',
+        COLORS.crystal,
+      ],
+      ['BUISSONS', 'Tu y es invisible pour l’ennemi, sauf de très près ou juste après avoir tiré.', 0x55c878],
+      ['ARÈNE VIVANTE', 'Toutes les 30 s : lave, brouillard, murs mobiles ou orage. Un bandeau prévient 3 s avant.', 0xff8a4d],
+    ];
+    let ly = y + 50;
+    for (const [title, text, color] of lines) {
+      addText(this, x + 22, ly, title, { size: 12, color: hex(color), depth: D });
+      const t = addText(this, x + 138, ly, text, { size: 12, color: '#dfe6ff', bold: false, wrap: w - 160, depth: D });
+      ly += Math.max(20, t.height) + 7;
+    }
+
+    const b = { x: REF_W / 2 - 110, y: y + h - 52, w: 220, h: 40 };
+    g.fillStyle(0x8a5a00, 1);
+    g.fillRoundedRect(b.x, b.y + 3, b.w, b.h, 12);
+    g.fillStyle(COLORS.gold, 1);
+    g.fillRoundedRect(b.x, b.y, b.w, b.h, 12);
+    addText(this, REF_W / 2, b.y + b.h / 2, 'C’EST PARTI', { size: 17, ox: 0.5, oy: 0.5, color: '#3a2a00', depth: D });
+    // Toucher n'importe où ferme l'aide
+    this.buttons.add({
+      x: -3000,
+      y: -3000,
+      w: 6844,
+      h: 6390,
+      onTap: () => {
+        this.helpOpen = false;
+        save('elementa.helpSeen', '1');
         this.rebuild();
       },
     });
@@ -208,7 +297,7 @@ export class MenuScene extends Phaser.Scene {
     const stats = [
       ['PV', def.hp / STAT_MAX.hp, String(def.hp)],
       ['Vitesse', def.speed / STAT_MAX.speed, String(def.speed)],
-      ['Portée', def.attack.range / STAT_MAX.range, `${(def.attack.range / 64).toFixed(1)} cases`],
+      ['Portée', def.attack.range / STAT_MAX.range, `${(def.attack.range / TILE).toFixed(1).replace('.', ',')} cases`],
     ];
     stats.forEach(([label, pct, value], i) => {
       const sy = y + 70 + i * 19;
@@ -294,8 +383,10 @@ export class MenuScene extends Phaser.Scene {
     // (Sur iPhone, le plein écran s'obtient en ajoutant le jeu à l'écran d'accueil.)
     if (isTouchDevice() && !isIOS() && !isStandalone() && this.scale.fullscreen.available && !this.scale.isFullscreen) {
       try {
+        this.scale.once('enterfullscreen', () => {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        });
         this.scale.startFullscreen();
-        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
       } catch {
         /* refusé : on joue dans la fenêtre */
       }

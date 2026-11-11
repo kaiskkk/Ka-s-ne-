@@ -15,6 +15,7 @@ import { ArenaView, DEPTH } from '../render/ArenaView.js';
 import { Effects } from '../render/Effects.js';
 import { CrystalLayer, ProjectileLayer, StrikeLayer, ZoneLayer, visualOf } from '../render/EntityViews.js';
 import { FighterView } from '../render/FighterView.js';
+import { DEFAULT_DIFFICULTY } from '../sim/BotAI.js';
 import { Match } from '../sim/Match.js';
 import { clamp, lerp } from '../sim/mathx.js';
 import { controls } from '../ui/controls.js';
@@ -35,7 +36,7 @@ export class GameScene extends Phaser.Scene {
   init(data) {
     this.cfg = {
       charId: data.charId || 'braz',
-      difficulty: data.difficulty || 'normal',
+      difficulty: data.difficulty || DEFAULT_DIFFICULTY,
       seed: data.seed ?? Math.floor(Math.random() * 0x7fffffff),
     };
   }
@@ -53,6 +54,8 @@ export class GameScene extends Phaser.Scene {
     this.paused = false;
     this.ended = false;
     this.numbers = new Map();
+    this.fogA = 0; // opacité actuelle des voiles (brouillard, aveuglement)
+    this.blindA = 0;
 
     this.applyZoom();
     const { match, player } = this;
@@ -205,8 +208,8 @@ export class GameScene extends Phaser.Scene {
     const y = lerp(p.py, p.y, alpha);
     const fogTarget = this.match.arena.fog ? 0.93 : 0;
     const blindTarget = p.alive && p.blindT > 0 ? 0.96 : 0;
-    this.fogA = lerp(this.fogA || 0, fogTarget, Math.min(1, dt * 2.5));
-    this.blindA = lerp(this.blindA || 0, blindTarget, Math.min(1, dt * 7));
+    this.fogA = lerp(this.fogA, fogTarget, Math.min(1, dt * 2.5));
+    this.blindA = lerp(this.blindA, blindTarget, Math.min(1, dt * 7));
     // Le trou de la texture fait 1/8 (brouillard) ou 1/24 (aveuglement) de sa demi-largeur
     this.fog
       .setVisible(this.fogA > 0.01)

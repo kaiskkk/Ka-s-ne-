@@ -74,11 +74,14 @@ export class ArenaView {
     // Extérieur de l'arène (visible seulement sur les écrans très larges)
     g.fillStyle(C.outside, 1);
     g.fillRect(-2000, -2000, arena.width + 4000, arena.height + 4000);
-    // Damier discret
-    for (let r = 0; r < arena.rows; r++) {
-      for (let c = 0; c < arena.cols; c++) {
-        g.fillStyle((c + r) % 2 === 0 ? C.floorA : C.floorB, 1);
-        g.fillRect(c * TILE, r * TILE, TILE, TILE);
+    // Damier discret : un grand rectangle, puis seulement une case sur deux
+    // (deux fois moins de formes à dessiner à chaque image).
+    g.fillStyle(C.floorA, 1);
+    g.fillRect(0, 0, arena.width, arena.height);
+    g.fillStyle(C.floorB, 1);
+    for (let r = 1; r < arena.rows - 1; r++) {
+      for (let c = 1; c < arena.cols - 1; c++) {
+        if ((c + r) % 2 === 1) g.fillRect(c * TILE, r * TILE, TILE, TILE);
       }
     }
     // Zones de base teintées aux couleurs des équipes
@@ -129,27 +132,38 @@ export class ArenaView {
     const { arena } = this;
     const g = this.walls;
     const front = 12; // hauteur de la « face avant » (fausse 3D)
-    for (let r = 0; r < arena.rows; r++) {
-      for (let c = 0; c < arena.cols; c++) {
+    const { width, height, cols, rows } = arena;
+
+    // Mur d'enceinte : 4 grands rectangles plutôt qu'une centaine de cases
+    g.fillStyle(C.borderTop, 1);
+    g.fillRect(0, 0, width, TILE); // haut
+    g.fillRect(0, height - TILE, width, TILE); // bas
+    g.fillRect(0, TILE, TILE, height - 2 * TILE); // gauche
+    g.fillRect(width - TILE, TILE, TILE, height - 2 * TILE); // droite
+    g.fillStyle(C.borderFront, 1);
+    g.fillRect(TILE, TILE - front, width - 2 * TILE, front); // face avant du mur du haut
+
+    // Murs intérieurs
+    for (let r = 1; r < rows - 1; r++) {
+      for (let c = 1; c < cols - 1; c++) {
         if (arena.tileType(c, r) !== T_WALL) continue;
-        const border = c === 0 || r === 0 || c === arena.cols - 1 || r === arena.rows - 1;
         const x = c * TILE;
         const y = r * TILE;
-        const below = arena.tileType(c, r + 1) === T_WALL;
-        g.fillStyle(border ? C.borderFront : C.wallFront, 1);
-        g.fillRect(x, y, TILE, TILE);
-        g.fillStyle(border ? C.borderTop : C.wallTop, 1);
-        g.fillRect(x, y, TILE, below ? TILE : TILE - front);
-        if (!border) {
-          // Liseré clair en haut (seulement si la case du dessus est libre)
-          if (arena.tileType(c, r - 1) !== T_WALL) {
-            g.fillStyle(C.wallEdge, 1);
-            g.fillRect(x, y, TILE, 4);
-          }
-          // Petites fissures décoratives
-          g.fillStyle(C.wallFront, 0.5);
-          g.fillRect(x + 10 + hash(c, r) * 30, y + 14 + hash(c, r, 1) * 20, 12, 3);
+        const below = arena.tileType(c, r + 1) === T_WALL && r + 1 < rows - 1;
+        if (!below) {
+          g.fillStyle(C.wallFront, 1);
+          g.fillRect(x, y + TILE - front, TILE, front);
         }
+        g.fillStyle(C.wallTop, 1);
+        g.fillRect(x, y, TILE, below ? TILE : TILE - front);
+        // Liseré clair en haut (seulement si la case du dessus est libre)
+        if (arena.tileType(c, r - 1) !== T_WALL || r - 1 === 0) {
+          g.fillStyle(C.wallEdge, 1);
+          g.fillRect(x, y, TILE, 4);
+        }
+        // Petites fissures décoratives
+        g.fillStyle(C.wallFront, 0.5);
+        g.fillRect(x + 10 + hash(c, r) * 30, y + 14 + hash(c, r, 1) * 20, 12, 3);
       }
     }
   }
