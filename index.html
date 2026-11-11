@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>ÉLÉMENTA</title>
+    <meta name="description" content="ÉLÉMENTA — brawler 3v3 élémentaire : fusionnez vos pouvoirs, gardez les cristaux." />
+
+    <!--
+      viewport-fit=cover : le jeu s'étend sous l'encoche / la Dynamic Island
+      (les commandes, elles, restent dans la zone sûre — voir src/ui/viewport.js).
+      user-scalable=no + maximum-scale=1 : pas de zoom au pincement / double-tap.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+
+    <!-- PWA : installable sur l'écran d'accueil -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- iOS : plein écran une fois ajouté à l'écran d'accueil -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ÉLÉMENTA" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #0b1020;
+        color: #fff;
+        overflow: hidden;
+      }
+      /* Page figée : aucun défilement ni « rebond » élastique sur iOS */
+      html {
+        position: fixed;
+        inset: 0;
+      }
+      body {
+        position: fixed;
+        inset: 0;
+        overscroll-behavior: none;
+        touch-action: none; /* pas de zoom, pas de défilement au toucher */
+        -webkit-user-select: none;
+        user-select: none; /* pas de sélection de texte */
+        -webkit-touch-callout: none; /* pas de menu contextuel à l'appui long */
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+        font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, -apple-system, sans-serif;
+      }
+      #game {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+      }
+      #game canvas {
+        display: block;
+        touch-action: none;
+        outline: none;
+      }
+      /* Élément invisible servant à lire les marges de sécurité (encoche, Dynamic Island, barre d'accueil) */
+      #safe-probe {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 0;
+        height: 0;
+        visibility: hidden;
+        pointer-events: none;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+          env(safe-area-inset-left, 0px);
+      }
+      /* Le jeu se joue en paysage : message si le téléphone est tenu en portrait */
+      #rotate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #0b1020;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 18px;
+        text-align: center;
+        padding: 24px;
+        font-size: 20px;
+        line-height: 1.35;
+      }
+      #rotate .phone {
+        width: 64px;
+        height: 110px;
+        border: 5px solid #fff;
+        border-radius: 14px;
+        animation: turn 1.8s ease-in-out infinite;
+      }
+      #rotate small {
+        font-size: 14px;
+        opacity: 0.7;
+      }
+      @keyframes turn {
+        0%,
+        20% {
+          transform: rotate(0deg);
+        }
+        60%,
+        100% {
+          transform: rotate(-90deg);
+        }
+      }
+      @media (orientation: portrait) and (hover: none) and (pointer: coarse) {
+        #rotate {
+          display: flex;
+        }
+      }
+      #boot-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: #0b1020;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        font-size: 16px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <div id="rotate" aria-hidden="true">
+      <div class="phone"></div>
+      <div>Tourne ton téléphone<br />pour jouer en mode paysage</div>
+      <small>ÉLÉMENTA</small>
+    </div>
+    <div id="safe-probe"></div>
+    <div id="boot-error"></div>
+    <noscript>ÉLÉMENTA a besoin de JavaScript pour fonctionner.</noscript>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

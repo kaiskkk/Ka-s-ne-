@@ -452,6 +452,9 @@ test('cristaux : apparition échelonnée au centre', () => {
   const m = sandbox();
   isolate(m, []);
   const active = () => m.crystals.filter((c) => c.active).length;
+  // Le premier cristal est celui du centre exact de l'arène
+  assert.equal(m.crystals[0].y, m.arena.height / 2);
+  assert.ok(m.crystals.every((c, i) => c.spawnAt === CRYSTAL.spawnTimes[i]));
   m.step(SIM_DT);
   assert.equal(active(), CRYSTAL.spawnTimes.filter((t) => t <= 0).length);
   run(m, Math.max(...CRYSTAL.spawnTimes) + 0.5);
@@ -463,7 +466,7 @@ test('cristaux : ramassage, bonus du porteur, chute à la mort', () => {
   const f = m.fighters[0];
   const e = m.fighters[3];
   isolate(m, [f, e]);
-  const c = m.crystals[0];
+  const c = m.crystals.find((k) => m.arena.rowOf(k.y) === 7); // la ligne 7 n'a aucun mur
   c.active = true;
   place(f, c.x - 300, c.y);
   place(e, c.x + 150, c.y);

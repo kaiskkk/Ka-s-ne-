@@ -12,7 +12,10 @@ import { TAU } from './mathx.js';
 export class CrystalMode {
   constructor(match) {
     this.m = match;
-    this.crystals = match.arena.crystalSpawns.map((p, i) => ({
+    // Ordre d'apparition : d'abord le socle le plus proche du centre de l'arène
+    const cy = match.arena.height / 2;
+    const spots = [...match.arena.crystalSpawns].sort((a, b) => Math.abs(a.y - cy) - Math.abs(b.y - cy));
+    this.crystals = spots.map((p, i) => ({
       id: i,
       x: p.x,
       y: p.y,
