@@ -89,6 +89,7 @@ export function installViewport(game) {
     apply();
     setTimeout(apply, 120);
     setTimeout(apply, 500);
+    setTimeout(apply, 1000);
   };
 
   window.addEventListener('resize', schedule);

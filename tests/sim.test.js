@@ -784,6 +784,35 @@ test('match avec un joueur humain : commandes prises en compte, équipes de 3 pe
   assert.ok(p.ammo < COMBAT.maxAmmo);
 });
 
+test('fusion avec le joueur : un bot allié prêt le rejoint et garde son super', () => {
+  const m = new Match({ seed: 9, playerChar: 'braz', teams: [['braz', 'ondine', 'dolmen'], ['volta', 'alize', 'braz']] });
+  m.phase = 'playing';
+  m.director.index = 99;
+  const [player, ally, other] = m.fighters;
+  // Seul le bot allié n°1 reste actif ; les ennemis sont loin, inoffensifs et sans cristal à ramasser
+  m.bots = m.bots.filter((b) => b.f === ally);
+  m.crystals.forEach((c) => {
+    c.spawnAt = 1e9;
+    c.active = false;
+  });
+  isolate(m, [player, ally]);
+  place(player, 6 * TILE);
+  place(ally, 6 * TILE + 600);
+  other.superCharge = 0;
+  player.superCharge = 1;
+  ally.superCharge = 1;
+  assert.equal(m.findFusionPartner(player), null, 'trop loin au départ');
+  run(m, 3.5);
+  assert.ok(Math.hypot(ally.x - player.x, ally.y - player.y) <= FUSION.range, 'le bot est venu à portée de fusion');
+  assert.equal(ally.superCharge, 1, 'il a gardé son super');
+  assert.equal(player.superCharge, 1, 'un bot ne consomme jamais le super du joueur');
+  assert.equal(m.findFusionPartner(player), ally);
+  // Le joueur déclenche : Feu + Eau
+  m.queueAction(player.id, { type: 'fusion' });
+  m.step(SIM_DT);
+  assert.equal(fxOf(m, 'fusion')[0].name, 'Nuage de vapeur');
+});
+
 test('déterminisme : même graine → même match', () => {
   const play = () => {
     const m = new Match({ seed: 2024, playerChar: null });

@@ -192,7 +192,7 @@ export class MenuScene extends Phaser.Scene {
       ['SUPER', 'Il se charge en touchant les ennemis. Tap sur le bouton = visée automatique, glisser = viser soi-même.', COLORS.super],
       [
         'FUSION',
-        'Ton super ET celui d’un allié sont prêts, et vous êtes proches ? Le bouton FUSION s’allume : un combo qui dépend de vos deux éléments.',
+        'Ton super ET celui d’un allié sont prêts, et vous êtes proches ? Le bouton FUSION s’allume : un combo qui dépend de vos deux éléments. Un allié prêt (anneau doré) vient te rejoindre.',
         COLORS.fusion,
       ],
       [

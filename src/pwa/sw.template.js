@@ -41,19 +41,27 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Page HTML : réseau d'abord, cache en secours
+  // Page HTML : réseau d'abord (4 s max), cache en secours
   if (req.mode === 'navigate') {
     event.respondWith(
-      Promise.race([fetch(req), timeout(4000)])
-        .then((res) => {
+      (async () => {
+        const network = fetch(req).then((res) => {
           const type = res.headers.get('content-type') || '';
           if (res.ok && url.pathname === '/' && type.includes('text/html')) {
             const copy = res.clone();
             caches.open(CACHE).then((cache) => cache.put('/', copy));
           }
           return res;
-        })
-        .catch(() => caches.match('/', { ignoreSearch: true, ignoreVary: true }).then((hit) => hit || Response.error())),
+        });
+        network.catch(() => {}); // l'échec est géré ci-dessous
+        try {
+          return await Promise.race([network, timeout(4000)]);
+        } catch {
+          const hit = await caches.match('/', { ignoreSearch: true, ignoreVary: true });
+          // Hors ligne ou réseau lent : la copie en cache ; sans cache, on attend le réseau.
+          return hit || network;
+        }
+      })(),
     );
     return;
   }

@@ -56,6 +56,11 @@ Jeu web en JavaScript avec **Phaser 3**, installable sur l'écran d'accueil (PWA
 | Terre + Vent | **Tempête de sable** | Suit le lanceur : **camoufle** les alliés, blesse les ennemis |
 | Foudre + Vent | **Cyclone** | **Aspire** les ennemis vers son centre, puis les foudroie |
 
+Astuce : un combattant dont le super est prêt est entouré d'un **anneau doré**. Quand ton super est prêt,
+un allié prêt lui aussi vient vers toi et garde son super quelques secondes ; un trait relie vos deux
+personnages et devient lumineux dès que vous êtes assez proches. Les bots (alliés entre eux, et ennemis)
+déclenchent aussi leurs propres fusions.
+
 ### Événements de l'arène vivante
 
 | Événement | Effet |
@@ -74,7 +79,7 @@ Il faut [Node.js](https://nodejs.org) 20.19 ou plus récent.
 ```bash
 npm install      # installe Phaser et Vite
 npm run dev      # lance le jeu sur http://localhost:5173 (rechargement automatique)
-npm test         # tests de la simulation (44 tests, ~2 s)
+npm test         # tests de la simulation (45 tests, ~2 s)
 npm run build    # construit la version de production dans dist/
 npm run preview  # sert dist/ en local (pour tester la PWA / le hors-ligne)
 ```
@@ -190,7 +195,7 @@ duraient une trentaine de secondes. Pour revenir à ce réglage : `spawnTimes: [
 
 ### Tests
 
-- `npm test` — 44 tests de la simulation : carte symétrique et sans cul-de-sac, collisions, chaque personnage,
+- `npm test` — 45 tests de la simulation : carte symétrique et sans cul-de-sac, collisions, chaque personnage,
   **chacune des 10 fusions**, cristaux, événements d'arène, matchs complets bots contre bots, déterminisme.
 - `tests/e2e/smoke.cjs` — test de bout en bout dans Chromium (émulation d'un iPhone en paysage, vrais événements
   tactiles) : menu → match → joysticks → fusion → écran de résultat. Optionnel, nécessite

@@ -75,6 +75,10 @@ export class BotBrain {
     this.shotDelay = rng.range(0, 0.5);
     this.wasReady = false;
     this.superHoldT = 0;
+    // Attente du joueur humain pour une fusion (durée restante / délai avant une nouvelle attente)
+    this.humanWaitT = 0;
+    this.humanWaitCd = 0;
+    this.waitingHuman = null;
   }
 
   update(dt) {
@@ -89,6 +93,8 @@ export class BotBrain {
       this.fleeing = false;
       this.atRefuge = false;
       this.refuge = null;
+      this.humanWaitT = 0;
+      this.waitingHuman = null;
       return;
     }
     this.thinkT -= dt;
@@ -98,6 +104,8 @@ export class BotBrain {
     this.strafeT -= dt;
     this.wanderT -= dt;
     if (this.superHoldT > 0) this.superHoldT -= dt;
+    if (this.humanWaitT > 0) this.humanWaitT -= dt;
+    if (this.humanWaitCd > 0) this.humanWaitCd -= dt;
 
     if (this.thinkT <= 0) {
       this.thinkT = this.skill.thinkEvery * this.m.rng.range(0.8, 1.2);
@@ -161,6 +169,20 @@ export class BotBrain {
     if (!goal) {
       const c = m.crystalAssign.get(f.id);
       if (c && c.carrierId < 0) goal = { type: 'collect', x: c.x, y: c.y };
+    }
+    // Le joueur humain et ce bot ont tous deux leur super : le bot le rejoint et
+    // garde son super quelques secondes pour lui laisser déclencher la FUSION.
+    const human = m.player;
+    const canFuseWithHuman =
+      f.superReady && human && human !== f && human.team === f.team && human.alive && human.superReady && distObj(f, human) < 900;
+    if (canFuseWithHuman && this.humanWaitT <= 0 && this.humanWaitCd <= 0) {
+      this.humanWaitT = 8;
+      this.humanWaitCd = 20;
+    }
+    if (!canFuseWithHuman) this.humanWaitT = 0;
+    this.waitingHuman = canFuseWithHuman && this.humanWaitT > 0 ? human : null;
+    if (!goal && this.waitingHuman && distObj(f, human) > FUSION.range * 0.55) {
+      goal = { type: 'follow', ally: human.id, keep: FUSION.range * 0.5 };
     }
     if (!goal && theirCount > 0) {
       // Chasse au porteur adverse (il est visible de tous)
@@ -233,6 +255,7 @@ export class BotBrain {
       if (f.hpPct > 0.4) return; // les deux sont prêts : on attend une cible
     }
     if (this.superHoldT > 0 && f.hpPct > 0.4) return;
+    if (this.waitingHuman && f.hpPct > 0.35) return; // on laisse au joueur le temps de fusionner
     if (!rng.chance(this.skill.superChance)) return;
 
     const s = f.def.super;
