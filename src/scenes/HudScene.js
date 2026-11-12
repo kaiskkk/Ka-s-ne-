@@ -974,7 +974,7 @@ export class HudScene extends Phaser.Scene {
     button(3, 'Quitter le match', 0xa83246, () => {
       music.stop();
       this.scene.stop('Game');
-      this.scene.start('Menu');
+      this.scene.start('Home');
     });
   }
 }

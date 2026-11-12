@@ -6,6 +6,7 @@ import * as Phaser from 'phaser';
 import { buildCharacterAtlases } from '../art/characterArt.js';
 import { buildFxAtlas } from '../art/fxArt.js';
 import { buildBushTextures, buildGroundTexture, buildMoverTextures } from '../art/mapArt.js';
+import { buildRaysTexture, buildUiAtlas } from '../art/uiArt.js';
 import { DEFAULT_MAP, MAPS } from '../config/maps.js';
 import { Arena } from '../sim/Arena.js';
 
@@ -27,6 +28,8 @@ export class BootScene extends Phaser.Scene {
     this.makeVignette();
 
     buildFxAtlas(this);
+    buildUiAtlas(this);
+    buildRaysTexture(this);
     buildCharacterAtlases(this);
 
     // Décor de l'arène : peint une fois pour toutes
@@ -37,7 +40,7 @@ export class BootScene extends Phaser.Scene {
 
     const data = this.registry.get('autostart');
     if (data) this.scene.start('Game', data);
-    else this.scene.start('Menu');
+    else this.scene.start('Home');
   }
 
   /** Bords d'écran colorés, centre transparent (flash quand le joueur est touché). */

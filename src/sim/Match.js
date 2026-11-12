@@ -47,6 +47,7 @@ export class Match {
    * @param {string}  [opts.difficulty]  'facile' | 'normal' | 'difficile' (bots adverses)
    * @param {string}  [opts.mapId]
    * @param {string[][]} [opts.teams]    compositions imposées [[3 ids], [3 ids]] (tests)
+   * @param {number}  [opts.playerPower] multiplicateur de PV et de dégâts du joueur (niveau du personnage)
    */
   constructor(opts = {}) {
     this.rng = new Rng(opts.seed ?? 12345);
@@ -107,8 +108,10 @@ export class Match {
         const isPlayer = team === 0 && i === 0 && !!playerChar;
         const f = new Fighter(this.fighters.length, team, CHARACTERS[charId], spawn, isPlayer);
         this.fighters.push(f);
-        if (isPlayer) this.player = f;
-        else this.bots.push(new BotBrain(this, f, team === 0 ? 'normal' : this.difficulty));
+        if (isPlayer) {
+          this.player = f;
+          if (opts.playerPower > 1) f.setPower(opts.playerPower);
+        } else this.bots.push(new BotBrain(this, f, team === 0 ? 'normal' : this.difficulty));
       });
     }
   }
@@ -444,7 +447,7 @@ export class Match {
     if (target.invulnT > 0) return 0;
     const owner = src.owner || null;
     let dmg = amount;
-    if (owner) dmg *= 1 + CRYSTAL.damageBonus * owner.carrying; // bonus du porteur
+    if (owner) dmg *= (1 + CRYSTAL.damageBonus * owner.carrying) * owner.power; // bonus du porteur × niveau
     if (target.drT > 0) dmg *= 1 - target.drFactor;
     dmg = Math.max(1, Math.round(dmg));
 

@@ -11,8 +11,14 @@ import { CharacterRig } from './render/CharacterRig.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
-import { MenuScene } from './scenes/MenuScene.js';
 import { ResultScene } from './scenes/ResultScene.js';
+import { CharsScene } from './scenes/menu/CharsScene.js';
+import { ChestScene } from './scenes/menu/ChestScene.js';
+import { HomeScene } from './scenes/menu/HomeScene.js';
+import { RanksScene } from './scenes/menu/RanksScene.js';
+import { ShopScene } from './scenes/menu/ShopScene.js';
+import { TrackScene } from './scenes/menu/TrackScene.js';
+import { profile } from './meta/profile.js';
 import { controls } from './ui/controls.js';
 import { blockBrowserGestures, installViewport, viewport } from './ui/viewport.js';
 
@@ -49,7 +55,7 @@ function start() {
     audio: { noAudio: true }, // les sons sont synthétisés par src/audio/Sfx.js
     disableContextMenu: true,
     banner: false,
-    scene: [BootScene, MenuScene, GameScene, HudScene, ResultScene],
+    scene: [BootScene, HomeScene, CharsScene, ShopScene, TrackScene, RanksScene, GameScene, HudScene, ResultScene, ChestScene],
   });
 
   installViewport(game);
@@ -67,6 +73,7 @@ function start() {
       controls,
       sfx,
       music,
+      profile,
       CharacterRig,
       get match() {
         const scene = game.scene.getScene('Game');
@@ -84,7 +91,7 @@ function start() {
   }
 
   // Nouvelle version déployée : le jeu se recharge tout seul, mais jamais en plein match
-  registerServiceWorker(() => game.scene.isActive('Menu'));
+  registerServiceWorker(() => game.scene.isActive('Home'));
 }
 
 /** Attend que la police du jeu soit prête (sinon les premiers textes s'afficheraient avec une police de secours). */

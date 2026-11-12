@@ -4,8 +4,11 @@ Brawler élémentaire **3 contre 3** vu de dessus, pensé pour mobile (paysage, 
 Jeu web en JavaScript avec **Phaser 3**, installable sur l'écran d'accueil (PWA) et optimisé pour iPhone.
 
 > Personnages cartoon animés, décor peint, particules par élément, musique et bruitages :
-> **tout est original et fabriqué par le code** (aucun fichier image ni audio). Les personnages et le décor sont
-> dessinés au démarrage (Canvas 2D), la musique est composée et jouée en direct (Web Audio).
+> **tout est original et fabriqué par le code** (aucun fichier image ni audio). Les personnages, le décor et les
+> icônes du menu sont dessinés au démarrage (Canvas 2D), la musique est composée et jouée en direct (Web Audio).
+
+Autour des matchs : un **menu de jeu mobile complet** (accueil, personnages, boutique, pass de saison,
+classement) et une **progression sauvegardée sur le téléphone** — trophées, pièces, gemmes, niveaux.
 
 ---
 
@@ -78,6 +81,53 @@ déclenchent aussi leurs propres fusions.
 
 ---
 
+## Menu et progression
+
+Tout se gagne **en jouant** : il n'y a aucun achat en argent réel.
+
+### L'accueil
+
+- **Au centre** : ton personnage, en grand et animé, sur un fond aux couleurs de son élément.
+  Les flèches changent de personnage ; le toucher ouvre sa fiche.
+- **En haut à gauche** : ton profil (pseudo, niveau, barre d'XP) et tes trophées.
+  Toucher le profil ouvre les réglages (pseudo, sons, musique, aide, remise à zéro).
+- **En haut à droite** : tes pièces et tes gemmes (le **+** mène à la boutique).
+- **À gauche** : Boutique, Personnages, Pass de saison, Classement. Une pastille rouge signale
+  une récompense à récupérer ou une amélioration possible.
+- **En bas** : la **Voie des Cristaux** (paliers de trophées), le **mode de jeu** (toucher pour choisir
+  la difficulté des bots) et le gros bouton **JOUER**.
+
+### Ce que rapporte un match
+
+| | Trophées | Pièces | XP | Points de saison |
+|---|---|---|---|---|
+| Victoire | +8 | +24 | +40 | +30 |
+| Égalité | +1 | +12 | +20 | +16 |
+| Défaite | −4 (−2 sous 20 trophées) | +8 | +14 | +12 |
+
+- Chaque élimination ajoute **2 pièces** (16 au maximum par match).
+- Bots **Normal** : trophées gagnés et pièces ×1,25 ; bots **Difficile** : ×1,5.
+- Les trophées sont comptés **par personnage** ; leur total fait avancer la Voie des Cristaux.
+- Chaque niveau de joueur gagné rapporte 40 pièces et 2 gemmes.
+
+### Ce qu'on en fait
+
+- **Améliorer un personnage** (niveau 1 à 9, de 80 à 1 250 pièces) : chaque niveau donne
+  **+5 % de PV et de dégâts** en match.
+- **Voie des Cristaux** : 10 paliers, de 10 à 400 trophées. Un palier atteint reste acquis, même si
+  l'on reperd des trophées ensuite.
+- **Pass de saison** (« Saison 1 · L'Éveil des Éléments ») : 12 paliers gratuits, un tous les 100 points.
+- **Boutique** : un **cadeau gratuit par jour**, deux offres qui changent à minuit, et trois coffres —
+  *Coffre d'éveil* (120 pièces, 3 récompenses), *Coffre des marées* (25 gemmes, 5 récompenses),
+  *Coffre de fusion* (60 gemmes, 8 récompenses). À l'ouverture, les récompenses sortent une par une.
+- **Classement** : pour l'instant ton score est comparé à des **joueurs fictifs** ; le vrai classement
+  viendra avec le multijoueur en ligne.
+
+La progression est enregistrée **sur l'appareil** (`localStorage`) : elle survit à la fermeture du jeu et
+aux mises à jour, mais ne suit pas d'un téléphone à l'autre, et disparaît si l'on efface les données du site.
+
+---
+
 ## Lancer le jeu sur son ordinateur
 
 Il faut [Node.js](https://nodejs.org) 20.19 ou plus récent.
@@ -85,7 +135,7 @@ Il faut [Node.js](https://nodejs.org) 20.19 ou plus récent.
 ```bash
 npm install      # installe Phaser et Vite
 npm run dev      # lance le jeu sur http://localhost:5173 (rechargement automatique)
-npm test         # tests de la simulation (45 tests, ~2 s)
+npm test         # tests de la simulation et de la progression (59 tests, ~2 s)
 npm run build    # construit la version de production dans dist/
 npm run preview  # sert dist/ en local (pour tester la PWA / le hors-ligne)
 ```
@@ -100,7 +150,7 @@ Paramètres d'adresse utiles pour tester :
 | `?play=volta` | lance directement un match avec ce personnage (`braz`, `ondine`, `dolmen`, `volta`, `alize`) |
 | `?difficulty=facile` | `facile`, `normal` ou `difficile` (avec `?play`) |
 | `?notch=1` | simule l'encoche / Dynamic Island d'un iPhone tenu en paysage |
-| `?debug` | expose `window.__ELEMENTA__` (jeu, match en cours…) dans la console |
+| `?debug` | expose `window.__ELEMENTA__` (jeu, match en cours, profil…) dans la console |
 
 ---
 
@@ -153,7 +203,7 @@ vite.config.js          build + génération du service worker
 vercel.json             configuration du déploiement
 public/                 manifest de la PWA et icônes
 scripts/                outil de génération des icônes
-tests/                  tests de la simulation (Node) et test de bout en bout (navigateur)
+tests/                  tests de la simulation et de la progression (Node), test de bout en bout (navigateur)
 src/
 ├── main.js             démarrage de Phaser
 ├── config/             ← TOUT L'ÉQUILIBRAGE EST ICI
@@ -162,7 +212,10 @@ src/
 │   ├── fusions.js      la table des 10 fusions
 │   ├── arenaEvents.js  les événements de l'arène vivante
 │   ├── maps.js         la carte (dessinée en ASCII, symétrique)
-│   └── elements.js     couleurs des éléments et des équipes
+│   ├── elements.js     couleurs des éléments et des équipes
+│   └── meta.js         l'économie : récompenses de match, coûts, Voie des Cristaux, pass, coffres, offres
+├── meta/
+│   └── profile.js      LE PROFIL DU JOUEUR — JavaScript pur : monnaies, trophées, niveaux, sauvegarde
 ├── sim/                LA SIMULATION — JavaScript pur, sans Phaser
 │   ├── Match.js        boucle de jeu, dégâts, vision, victoire
 │   ├── Arena.js        grille, collisions, lancers de rayon, lave, murs mobiles
@@ -176,13 +229,17 @@ src/
 ├── art/                LES DESSINS, faits par le code (Canvas 2D)
 │   ├── characterArt.js les 5 personnages, en pièces séparées (tête, corps, arme…)
 │   ├── mapArt.js       sol (herbe, dallage, fleurs), murs de pierre, buissons
-│   └── fxArt.js        particules, projectiles, emblèmes des éléments, cristal
-├── scenes/             écrans Phaser : Boot, Menu, Game, Hud, Result
+│   ├── fxArt.js        particules, projectiles, emblèmes des éléments, cristal
+│   └── uiArt.js        icônes du menu : pièce, gemme, trophée, coffres…
+├── scenes/             écrans Phaser du match : Boot, Game, Hud, Result (fin de match)
+│   └── menu/           écrans du menu : Home (accueil), Chars, Shop, Chest (ouverture de coffre),
+│                       Track (Voie des Cristaux et pass), Ranks — et MenuBase, leur socle commun
 ├── render/             affichage de la simulation
 │   ├── CharacterRig.js pantin animé : marche, tir, clignement, mort…
 │   ├── Effects.js      particules par élément, ondes de choc, animation de fusion
 │   └── …               arène, combattants, projectiles, zones
-├── ui/                 écran (zones sûres, redimensionnement), boutons, thème
+├── ui/                 écran (zones sûres, redimensionnement), thème,
+│                       kit.js (gros boutons, panneaux, barres, pastilles du menu)
 ├── audio/              Sfx.js (bruitages) et Music.js (musique), synthétisés
 └── pwa/                service worker (hors ligne, mises à jour)
 ```
@@ -196,6 +253,10 @@ src/
 - **`src/scenes/` + `src/render/`** ne font qu'afficher l'état de la simulation et lui transmettre
   les commandes du joueur (déplacement, tir, super, fusion).
 
+La progression suit le même principe : **`src/meta/profile.js`** contient toutes les règles (récompenses,
+achats, paliers) sans Phaser, donc testables sous Node ; les écrans de `src/scenes/menu/` ne font que
+l'afficher. Le jour où il y aura des comptes en ligne, c'est ce fichier qui passera côté serveur.
+
 ### Régler le jeu
 
 | Je veux… | Fichier |
@@ -208,6 +269,9 @@ src/
 | régler la caméra (zoom) | `VIEW` dans `src/config/constants.js` |
 | modifier la musique | `TRACKS` dans `src/audio/Music.js` |
 | rendre les bots plus ou moins forts | `BOT_SKILL` dans `src/sim/BotAI.js` |
+| changer les récompenses de match, le prix des améliorations ou des coffres | `src/config/meta.js` |
+| modifier les paliers de la Voie des Cristaux ou du pass de saison | `ROAD` et `PASS` dans `src/config/meta.js` |
+| redessiner une icône du menu | `src/art/uiArt.js` |
 
 Note de conception : les 3 cristaux apparaissent **l'un après l'autre** (0 s, 20 s, 40 s).
 Avec les 3 présents dès le coup d'envoi, l'équipe qui gagnait le premier combat ramassait tout et les matchs
@@ -215,15 +279,19 @@ duraient une trentaine de secondes. Pour revenir à ce réglage : `spawnTimes: [
 
 ### Tests
 
-- `npm test` — 45 tests de la simulation : carte symétrique et sans cul-de-sac, collisions, chaque personnage,
+- `npm test` — 59 tests. **Simulation** (45) : carte symétrique et sans cul-de-sac, collisions, chaque personnage,
   **chacune des 10 fusions**, cristaux, événements d'arène, matchs complets bots contre bots, déterminisme.
+  **Progression** (14) : récompenses de match, niveaux, améliorations, paliers, coffres, offres du jour,
+  sauvegarde et relecture d'un profil abîmé.
 - `tests/e2e/smoke.cjs` — test de bout en bout dans Chromium (émulation d'un iPhone en paysage, vrais événements
-  tactiles) : menu → match → joysticks → fusion → écran de résultat. Optionnel, nécessite
+  tactiles) : accueil → fiche d'un personnage → amélioration → boutique → ouverture d'un coffre → match →
+  joysticks → fusion → écran de fin (trophées, pièces) → sauvegarde après rechargement. Optionnel, nécessite
   [Playwright](https://playwright.dev) : `npm run build && npm run preview` puis `node tests/e2e/smoke.cjs`.
 
 ---
 
 ## Et ensuite ?
 
-Idées pour les prochaines étapes : multijoueur en ligne, nouvelles cartes, nouveaux personnages,
-progression (niveaux, déblocages), choix des coéquipiers, tutoriel interactif.
+Idées pour les prochaines étapes : multijoueur en ligne (avec un vrai classement et une progression
+liée à un compte), nouveaux modes de jeu, nouvelles cartes, nouveaux personnages à débloquer,
+apparences à gagner dans le pass, choix des coéquipiers, tutoriel interactif.

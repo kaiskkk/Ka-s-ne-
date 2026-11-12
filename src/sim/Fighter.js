@@ -22,6 +22,8 @@ export class Fighter {
     this.spawn = spawn;
     this.r = def.radius;
     this.maxHp = def.hp;
+    /** Multiplicateur de PV et de dégâts (niveau du personnage du joueur) ; 1 = niveau 1. */
+    this.power = 1;
 
     // Statistiques du match
     this.kills = 0;
@@ -38,6 +40,13 @@ export class Fighter {
 
     this.reset(spawn.x, spawn.y);
     this.facing = team === 0 ? 0 : Math.PI;
+  }
+
+  /** Applique le niveau du personnage : PV max et dégâts multipliés. */
+  setPower(power) {
+    this.power = power;
+    this.maxHp = Math.round(this.def.hp * power);
+    this.hp = this.maxHp;
   }
 
   /** Remet le combattant à neuf (début de match / réapparition). */

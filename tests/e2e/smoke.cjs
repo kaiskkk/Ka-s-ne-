@@ -2,8 +2,12 @@
 //  Test de bout en bout d'ÉLÉMENTA dans Chromium, en émulant un iPhone
 //  tenu en paysage, avec de VRAIS événements tactiles multi-doigts.
 //
-//  Parcours vérifié : menu → choix du personnage → match → joysticks →
-//  tir → super → fusion → pause → écran de résultat → rejouer → portrait.
+//  Parcours vérifié :
+//    accueil → aide du premier lancement → personnages → fiche → améliorer
+//    → choisir → boutique → cadeau du jour → coffre (ouverture) → JOUER
+//    → joysticks → tir → super → fusion → pause → portrait
+//    → fin de match (trophées, pièces, sauvegarde) → accueil → rechargement
+//    → défaite → rejouer.
 //
 //  Utilisation (optionnel, nécessite Playwright) :
 //    npm run build && npm run preview          (dans un premier terminal)
@@ -48,20 +52,53 @@ async function main() {
       const p = window.__ELEMENTA__.match.player;
       return { x: p.x, y: p.y, ammo: p.ammo, superCharge: p.superCharge, charId: p.charId, alive: p.alive };
     });
-  /** Centre (en pixels écran) des boutons d'un écran de menu. */
-  const buttons = (sceneKey) =>
-    ev((key) => {
-      const g = window.__ELEMENTA__.game;
-      const s = g.scene.getScene(key);
-      const cam = s.cameras.main;
-      return s.buttons.list.map((b) => ({
-        x: ((b.x + b.w / 2 - cam.scrollX) * cam.zoom) / g.scale.displayScale.x,
-        y: ((b.y + b.h / 2 - cam.scrollY) * cam.zoom) / g.scale.displayScale.y,
-      }));
-    }, sceneKey);
+  const profile = () => ev(() => JSON.parse(JSON.stringify(window.__ELEMENTA__.profile.data)));
+  const saved = () => ev(() => JSON.parse(localStorage.getItem('elementa.profile')));
+
+  /** Attend qu'un écran soit affiché, immobile (transition finie) et prêt à recevoir des taps. */
+  const ready = (key) =>
+    page.waitForFunction(
+      (k) => {
+        const g = window.__ELEMENTA__.game;
+        const s = g.scene.getScene(k);
+        if (!s || !g.scene.isActive(k) || s.leaving || !s.buttons || !s.buttons.enabled) return false;
+        const cam = s.cameras.main;
+        if (cam.fadeEffect.isRunning) return false;
+        if (s.__seenScroll !== cam.scrollX) {
+          s.__seenScroll = cam.scrollX; // encore en train de glisser : on repasse
+          return false;
+        }
+        return true;
+      },
+      key,
+      { timeout: 15000, polling: 150 },
+    );
+  /** Centre (en pixels écran) d'un bouton de menu, retrouvé par son identifiant. */
+  const center = (key, id) =>
+    ev(
+      ([k, i]) => {
+        const g = window.__ELEMENTA__.game;
+        const s = g.scene.getScene(k);
+        const b = s.buttons.list.find((x) => x.id === i);
+        if (!b) return null;
+        const cam = s.cameras.main;
+        return {
+          x: ((b.x + b.w / 2 - cam.scrollX) * cam.zoom) / g.scale.displayScale.x,
+          y: ((b.y + b.h / 2 - cam.scrollY) * cam.zoom) / g.scale.displayScale.y,
+        };
+      },
+      [key, id],
+    );
+  /** Tape un bouton au doigt. */
+  const tap = async (key, id) => {
+    await ready(key);
+    const c = await center(key, id);
+    assert.ok(c, `bouton « ${id} » présent sur l'écran ${key}`);
+    await page.touchscreen.tap(c.x, c.y);
+  };
   const step = (label) => console.log(`  ✓ ${label}`);
 
-  // ── Menu ──
+  // ── Accueil ──
   await page.goto(`${BASE}/?debug`);
   await page.waitForFunction(() => window.__ELEMENTA__ && window.__ELEMENTA__.game.isBooted, null, { timeout: 20000 });
   await sleep(600);
@@ -69,30 +106,68 @@ async function main() {
     const g = window.__ELEMENTA__.game;
     return { webgl: g.renderer.type === 2, canvas: [g.canvas.width, g.canvas.height], css: g.canvas.style.width };
   });
-  assert.deepEqual(await scenes(), ['Menu']);
+  assert.deepEqual(await scenes(), ['Home']);
   assert.deepEqual(boot.canvas, [1688, 780], 'canvas rendu en pixels physiques (×2)');
   assert.equal(boot.css, '844px');
-  step(`menu affiché (${boot.webgl ? 'WebGL' : 'Canvas'}, canvas ${boot.canvas.join('×')})`);
+  const fresh = await profile();
+  assert.deepEqual([fresh.coins, fresh.gems, fresh.level, fresh.selected], [150, 15, 1, 'braz'], 'profil de départ');
+  step(`accueil affiché (${boot.webgl ? 'WebGL' : 'Canvas'}, canvas ${boot.canvas.join('×')})`);
 
-  // Premier lancement : le panneau « Comment jouer » est ouvert, un tap le ferme
-  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').helpOpen), true);
-  await page.touchscreen.tap(422, 200);
+  // Premier lancement : la fenêtre « Comment jouer » s'ouvre toute seule
+  const popupOpen = () => ev(() => !!window.__ELEMENTA__.game.scene.getScene('Home').popup);
+  await page.waitForFunction(() => !!window.__ELEMENTA__.game.scene.getScene('Home').popup, null, { timeout: 8000 });
+  await tap('Home', 'help-ok');
   await sleep(300);
-  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').helpOpen), false);
+  assert.equal(await popupOpen(), false);
+  assert.equal((await saved()).helpSeen, true, 'l’aide ne se rouvrira pas');
   step('aide « Comment jouer » au premier lancement');
 
-  // Choisir Alizé (5ᵉ carte) puis JOUER, au doigt
-  let b = await buttons('Menu');
-  assert.equal(b.length, 12, 'aide + musique + sons + 3 difficultés + 5 personnages + JOUER');
-  await page.touchscreen.tap(b[10].x, b[10].y);
-  await sleep(400);
-  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').selected), 'alize');
-  b = await buttons('Menu');
-  await page.touchscreen.tap(b[11].x, b[11].y);
-  await sleep(600);
+  // Le test s'offre des pièces pour pouvoir tout essayer
+  await ev(() => window.__ELEMENTA__.profile.grant({ coins: 500 }));
+
+  // ── Personnages : grille → fiche d'Alizé → améliorer → choisir ──
+  await tap('Home', 'chars');
+  await tap('Chars', 'char-alize');
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.getScene('Chars').sceneData.sheet === 'alize', null, { timeout: 8000 });
+  await tap('Chars', 'upgrade');
+  await page.waitForFunction(() => window.__ELEMENTA__.profile.data.chars.alize.level === 2, null, { timeout: 8000 });
+  assert.equal((await profile()).coins, 650 - 80, 'l’amélioration coûte 80 pièces');
+  await tap('Chars', 'select');
+  await ready('Home');
+  assert.equal((await profile()).selected, 'alize');
+  step('fiche du personnage : améliorer (−80 pièces) puis choisir');
+
+  // ── Boutique : cadeau du jour, puis un coffre qui s'ouvre ──
+  await tap('Home', 'shop');
+  await tap('Shop', 'offer-cadeau');
+  await page.waitForFunction(() => window.__ELEMENTA__.profile.data.shop.bought.includes('cadeau'), null, { timeout: 8000 });
+  assert.equal((await profile()).coins, 570 + 40, 'cadeau du jour : +40 pièces');
+  const beforeChest = await profile();
+  await tap('Shop', 'chest-eveil');
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.isActive('Chest'), null, { timeout: 8000 });
+  // Le contenu est crédité tout de suite ; l'animation n'est que du spectacle
+  const afterChest = await profile();
+  assert.ok(afterChest.gems > beforeChest.gems, 'un coffre contient toujours des gemmes');
+  const chestState = () => ev(() => window.__ELEMENTA__.game.scene.getScene('Chest').state);
+  for (let i = 0; i < 40 && (await chestState()) !== 'done'; i++) {
+    await page.touchscreen.tap(422, 150); // ouvrir, puis passer chaque récompense
+    await sleep(250);
+  }
+  assert.equal(await chestState(), 'done', 'toutes les récompenses sont sorties');
+  await tap('Chest', 'collect');
+  await page.waitForFunction(() => !window.__ELEMENTA__.game.scene.isActive('Chest'), null, { timeout: 8000 });
+  await ready('Shop');
+  assert.deepEqual(await saved(), await profile(), 'le profil est sauvegardé sur l’appareil');
+  step('boutique : cadeau du jour et ouverture d’un coffre');
+
+  // ── JOUER ──
+  await tap('Shop', 'back');
+  await tap('Home', 'play');
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.isActive('Hud'), null, { timeout: 8000 });
   assert.deepEqual(await scenes(), ['Game', 'Hud']);
   assert.equal((await player()).charId, 'alize');
-  step('personnage choisi et match lancé au doigt');
+  assert.equal(await ev(() => window.__ELEMENTA__.match.player.power), 1.05, 'niveau 2 : +5 % de PV et de dégâts en match');
+  step('match lancé au doigt, avec le personnage choisi et son niveau');
 
   // ── Match ──
   await page.waitForFunction(() => window.__ELEMENTA__.match.phase === 'playing', null, { timeout: 10000 });
@@ -225,18 +300,50 @@ async function main() {
   await ev(() => window.__ELEMENTA__.game.scene.getScene('Game').setPaused(false));
   step('portrait → message de rotation et pause ; retour en paysage');
 
-  // ── Fin de match ──
+  // ── Fin de match : victoire ──
+  const beforeWin = await profile();
   await ev(() => window.__ELEMENTA__.match.finish(0, 'hold'));
-  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.getScenes(true).some((s) => s.scene.key === 'Result'), null, {
-    timeout: 8000,
-  });
-  await sleep(600);
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.isActive('Result'), null, { timeout: 8000 });
+  await ready('Result');
   assert.deepEqual(await scenes(), ['Result']);
-  assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Result').data_.outcome), 'win');
-  step('écran de résultat');
-  b = await buttons('Result');
-  await page.touchscreen.tap(b[0].x, b[0].y); // REJOUER
+  const win = await ev(() => window.__ELEMENTA__.game.scene.getScene('Result').sceneData);
+  assert.equal(win.outcome, 'win');
+  assert.equal(win.rewards.trophies.delta, 8, 'une victoire rapporte 8 trophées');
+  assert.ok(win.rewards.coins.delta >= 24, 'une victoire rapporte des pièces');
+  const afterWin = await saved();
+  assert.equal(afterWin.chars.alize.trophies, 8, 'trophées sauvegardés');
+  assert.ok(afterWin.coins >= beforeWin.coins + 24, 'pièces sauvegardées');
+  assert.equal(afterWin.stats.wins, 1);
+  step(`écran de victoire : +${win.rewards.trophies.delta} trophées, +${win.rewards.coins.delta} pièces, +${win.rewards.xp.gained} XP`);
+
+  await tap('Result', 'continue');
+  await ready('Home');
+  assert.deepEqual(await scenes(), ['Home']);
+  step('CONTINUER ramène à l’accueil');
+
+  // La progression survit à un rechargement de la page, et l'aide ne revient pas
+  await page.reload();
+  await page.waitForFunction(() => window.__ELEMENTA__ && window.__ELEMENTA__.game.isBooted, null, { timeout: 20000 });
+  await ready('Home');
   await sleep(700);
+  assert.equal(await popupOpen(), false, 'l’aide ne se rouvre pas');
+  assert.deepEqual(await profile(), afterWin, 'profil identique après rechargement');
+  step('progression conservée après rechargement');
+
+  // ── Défaite, puis REJOUER ──
+  await tap('Home', 'play');
+  await page.waitForFunction(() => window.__ELEMENTA__.match && window.__ELEMENTA__.match.phase === 'playing', null, { timeout: 15000 });
+  await ev(() => window.__ELEMENTA__.match.finish(1, 'hold'));
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.isActive('Result'), null, { timeout: 8000 });
+  await ready('Result');
+  const lose = await ev(() => window.__ELEMENTA__.game.scene.getScene('Result').sceneData);
+  assert.equal(lose.outcome, 'lose');
+  assert.ok(lose.rewards.trophies.delta < 0, 'une défaite coûte des trophées');
+  assert.ok(lose.rewards.coins.delta > 0, 'une défaite rapporte quand même quelques pièces');
+  assert.equal((await saved()).chars.alize.trophies, 8 + lose.rewards.trophies.delta);
+  step(`écran de défaite : ${lose.rewards.trophies.delta} trophées, +${lose.rewards.coins.delta} pièces`);
+  await tap('Result', 'replay');
+  await page.waitForFunction(() => window.__ELEMENTA__.game.scene.isActive('Hud'), null, { timeout: 8000 });
   assert.deepEqual(await scenes(), ['Game', 'Hud']);
   step('REJOUER relance un match');
 

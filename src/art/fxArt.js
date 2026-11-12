@@ -2,21 +2,9 @@
 //  Atlas « fx » : particules de chaque élément, projectiles, emblèmes
 //  des éléments, cristal… Tout est dessiné par le code (voir canvas.js).
 // ─────────────────────────────────────────────────────────────
-import { Atlas, TAU, blob, circle, ellipse, line, linear, paint, poly, radial, roundRect } from './canvas.js';
+import { Atlas, TAU, blob, circle, ellipse, line, linear, paint, poly, radial, roundRect, star } from './canvas.js';
 
 export const FX_SCALE = 3;
-
-/** Étoile à n branches. */
-function star(c, n, r1, r0, rot = -Math.PI / 2) {
-  c.beginPath();
-  for (let i = 0; i < n * 2; i++) {
-    const r = i % 2 ? r0 : r1;
-    const a = rot + (i / (n * 2)) * TAU;
-    if (i === 0) c.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else c.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  c.closePath();
-}
 
 const zigzag = [[-18, -1], [-7, -6], [-4, -1.5], [6, -6.5], [9, -2], [18, -3], [7, 5.5], [4, 1.5], [-6, 6.5], [-9, 2]];
 

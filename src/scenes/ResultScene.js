@@ -1,86 +1,61 @@
 // ─────────────────────────────────────────────────────────────
-//  ResultScene — écran de victoire / défaite / égalité,
-//  avec le tableau des scores des deux équipes.
+//  ResultScene — fin de match : victoire / défaite / égalité, puis les
+//  récompenses qui s'animent une à une (trophées gagnés ou perdus, pièces,
+//  XP et niveau, points de saison, Voie des Cristaux), le tableau des
+//  scores, et retour au menu.
+//
+//  Les récompenses sont déjà enregistrées par GameScene au moment où le
+//  match se termine : cet écran ne fait que les montrer.
 // ─────────────────────────────────────────────────────────────
-import * as Phaser from 'phaser';
+import { sfx } from '../audio/Sfx.js';
 import { CHARACTERS } from '../config/characters.js';
 import { CRYSTAL } from '../config/constants.js';
 import { ELEMENTS, TEAM_COLORS } from '../config/elements.js';
-import { CharacterRig } from '../render/CharacterRig.js';
-import { Buttons } from '../ui/Buttons.js';
-import { COLORS, addText, fitWidth, hex, textResFor } from '../ui/theme.js';
-import { fitCamera } from '../ui/viewport.js';
+import { profile } from '../meta/profile.js';
+import { REF_W, bar, button, countUp, fmt, icon, panel, rewardFrame, rewardLabel } from '../ui/kit.js';
+import { addText, fitWidth, hex } from '../ui/theme.js';
+import { MenuBase, RIG_ANIM } from './menu/MenuBase.js';
 
-const REF_W = 844;
-const REF_H = 390;
-
-export class ResultScene extends Phaser.Scene {
+export class ResultScene extends MenuBase {
   constructor() {
     super('Result');
   }
 
-  init(data) {
-    this.data_ = data;
-  }
-
   create() {
-    this.rigs = [];
-    this.buttons = new Buttons(this);
-    this.rebuild();
-    this.onViewport = () => this.rebuild();
-    this.game.events.on('viewport-changed', this.onViewport);
-    this.events.once('shutdown', () => this.game.events.off('viewport-changed', this.onViewport));
-  }
-
-  update(time, delta) {
-    const dt = Math.min(0.05, delta / 1000);
-    const t = time / 1000;
-    for (const r of this.rigs) {
-      // Les vainqueurs sautent de joie, les perdants regardent leurs pieds
-      const hop = r.happy ? Math.abs(Math.sin(t * 5 + r.phase)) * r.jump : 0;
-      r.rig.setPosition(r.x, r.y - hop);
-      r.rig.update(dt, {
-        aim: r.happy ? Math.PI / 2 + Math.sin(t * 2 + r.phase) * 0.9 : Math.PI / 2,
-        moveX: 0,
-        moveY: 0,
-      });
-    }
-  }
-
-  addRig(id, x, y, scale, happy, jump) {
-    const rig = new CharacterRig(this, id, scale);
-    rig.setPosition(x, y).setDepth(5);
-    this.rigs.push({ rig, x, y, happy, jump, phase: this.rigs.length * 1.3 });
-    return rig;
-  }
-
-  rebuild() {
-    this.tweens.killAll();
-    this.children.removeAll(true);
-    this.rigs = [];
-    this.buttons.clear();
-    const zoom = fitCamera(this, REF_W, REF_H);
-    this.textRes = textResFor(zoom);
-
-    const { outcome, result, fighters } = this.data_;
-    const playerTeam = fighters.find((f) => f.isPlayer)?.team ?? 0;
+    this.begin();
+    const { outcome, result, fighters, rewards } = this.sceneData;
     const win = outcome === 'win';
     const draw = outcome === 'draw';
-    const accent = draw ? 0xffffff : win ? COLORS.gold : TEAM_COLORS[1].main;
+    const me = fighters.find((f) => f.isPlayer) || fighters[0];
+    const playerTeam = me.team;
+    const accent = draw ? 0xffffff : win ? 0xffd24a : 0xff5a6a;
 
-    // Fond
-    const bg = this.add.graphics().setDepth(-10);
-    bg.fillGradientStyle(0x16224a, 0x16224a, 0x0a0f22, 0x0a0f22, 1);
-    bg.fillRect(-3000, -3000, 6844, 6390);
-    this.add.image(REF_W / 2, 40, 'dot').setTint(accent).setAlpha(0.32).setDisplaySize(900, 420).setBlendMode('ADD').setDepth(-9);
+    this.drawBackdrop(win ? 'foudre' : draw ? 'vent' : 'eau', { cx: 124, cy: 210, rays: win ? 0.22 : 0.08 });
 
-    // Le personnage du joueur, à côté du titre
-    const me = fighters.find((f) => f.isPlayer);
-    if (me) {
-      this.addRig(me.charId, 150, 58, 1.0, win, 9);
-      this.addRig(me.charId, REF_W - 150, 58, 1.0, win, 9);
-    }
-    // Confettis de victoire
+    // ── Titre ──
+    const title = addText(this, REF_W / 2, 30, draw ? 'ÉGALITÉ' : win ? 'VICTOIRE !' : 'DÉFAITE', {
+      size: 44,
+      ox: 0.5,
+      oy: 0.5,
+      color: hex(accent),
+      stroke: '#05070f',
+      strokeW: 9,
+    });
+    title.setScale(0.3);
+    this.tweens.add({ targets: title, scale: 1, duration: 420, ease: 'Back.easeOut' });
+    fitWidth(addText(this, REF_W / 2, 64, this.reasonText(result, playerTeam), { size: 13, ox: 0.5, oy: 0.5, color: '#e6ecff', stroke: '#05070f', strokeW: 4 }), 560);
+
+    // ── Mon personnage ──
+    const def = CHARACTERS[me.charId];
+    const el = ELEMENTS[def.element];
+    const g = this.add.graphics().setDepth(1);
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(124, 262, 168, 34);
+    g.fillStyle(el.color, 0.55);
+    g.fillEllipse(124, 257, 176, 36);
+    const r = this.addRig(me.charId, 124, 204, 2, win ? RIG_ANIM.happy : RIG_ANIM.sad);
+    r.jump = 14;
+    fitWidth(addText(this, 124, 292, def.name.toUpperCase(), { size: 18, ox: 0.5, oy: 0.5, stroke: '#05070f', strokeW: 5 }), 200);
     if (win) {
       this.add
         .particles(0, 0, 'fx', {
@@ -93,34 +68,48 @@ export class ResultScene extends Phaser.Scene {
           rotate: { start: 0, end: 540 },
           scale: { min: 0.35, max: 0.6 },
           tint: [0xff5533, 0x2f9bff, 0xffd400, 0x52e0b8, 0xffffff, 0xff7bf0],
-          frequency: 55,
-          advance: 1500,
+          frequency: 60,
+          advance: 1200,
         })
-        .setDepth(20);
+        .setDepth(40);
     }
 
-    // Titre
-    const title = addText(this, REF_W / 2, 38, draw ? 'ÉGALITÉ' : win ? 'VICTOIRE !' : 'DÉFAITE', {
-      size: 46,
-      ox: 0.5,
-      oy: 0.5,
-      color: hex(accent),
-      stroke: '#05070f',
-      strokeW: 8,
+    this.drawRewards(rewards, 246, 84, 318);
+    this.drawScores(result, fighters, playerTeam, 576, 84, 254);
+
+    // ── Boutons ──
+    button(this, this.buttons, {
+      id: 'continue',
+      x: 246,
+      y: 334,
+      w: 318,
+      h: 42,
+      label: 'CONTINUER',
+      size: 21,
+      strokeW: 5,
+      color: 'yellow',
+      onTap: () => this.go('Home', {}, -1),
     });
-    title.setScale(0.4);
-    this.tweens.add({ targets: title, scale: 1, duration: 450, ease: 'Back.easeOut' });
-    addText(this, REF_W / 2, 78, this.reasonText(result, playerTeam), { size: 14, ox: 0.5, oy: 0.5, color: '#e6ecff' });
-
-    // Tableau des deux équipes
-    this.drawTeam(40, 98, playerTeam, 'VOTRE ÉQUIPE', result);
-    this.drawTeam(432, 98, 1 - playerTeam, 'ÉQUIPE ADVERSE', result);
-
-    // Boutons
-    this.button(232, 322, 240, 52, 'REJOUER', COLORS.gold, 0x8a5a00, '#3a2a00', () =>
-      this.scene.start('Game', { charId: this.data_.charId, difficulty: this.data_.difficulty }),
-    );
-    this.button(488, 322, 124, 52, 'MENU', COLORS.panelLight, 0x0a0d18, '#ffffff', () => this.scene.start('Menu'));
+    button(this, this.buttons, {
+      id: 'replay',
+      x: 576,
+      y: 336,
+      w: 254,
+      h: 38,
+      label: 'REJOUER',
+      size: 17,
+      color: 'blue',
+      sound: 'play',
+      onTap: () => {
+        if (this.leaving) return;
+        this.leaving = true;
+        this.buttons.enabled = false;
+        this.cameras.main.fadeOut(200, 8, 12, 28);
+        this.cameras.main.once('camerafadeoutcomplete', () =>
+          this.scene.start('Game', { charId: this.sceneData.charId, difficulty: this.sceneData.difficulty }),
+        );
+      },
+    });
   }
 
   reasonText(result, playerTeam) {
@@ -140,77 +129,150 @@ export class ResultScene extends Phaser.Scene {
     }
   }
 
-  drawTeam(x, y, team, label, result) {
-    const w = 372;
-    const h = 212;
-    const col = TEAM_COLORS[team];
-    const g = this.add.graphics();
-    g.fillStyle(COLORS.panel, 1);
-    g.fillRoundedRect(x, y, w, h, 14);
-    g.fillStyle(col.dark, 1);
-    g.fillRoundedRect(x, y, w, 34, { tl: 14, tr: 14, bl: 0, br: 0 });
-    g.lineStyle(2, result.winner === team ? COLORS.gold : COLORS.panelLine, 1);
-    g.strokeRoundedRect(x, y, w, h, 14);
+  // ── Récompenses animées ────────────────────────────────────
 
-    addText(this, x + 14, y + 17, label, { size: 14, oy: 0.5 });
-    addText(this, x + w - 14, y + 17, `${result.crystals[team]} ${result.crystals[team] > 1 ? 'cristaux' : 'cristal'} · ${result.kills[team]} élim.`, {
-      size: 12,
-      ox: 1,
-      oy: 0.5,
-      color: hex(col.light),
-    });
-
-    // En-têtes de colonnes
-    const cols = [x + 214, x + 282, x + 346];
-    ['Élim.', 'Dégâts', 'Cristaux'].forEach((t, i) =>
-      addText(this, cols[i], y + 48, t, { size: 10, ox: 0.5, oy: 0.5, color: '#9aa6c8', bold: false }),
-    );
-
-    const rows = this.data_.fighters.filter((f) => f.team === team);
-    const best = Math.max(...this.data_.fighters.map((f) => f.damage));
-    rows.forEach((f, i) => {
-      const def = CHARACTERS[f.charId];
-      const el = ELEMENTS[def.element];
-      const ry = y + 84 + i * 46;
-      if (f.isPlayer) {
-        g.fillStyle(0xffffff, 0.07);
-        g.fillRoundedRect(x + 8, ry - 20, w - 16, 40, 10);
+  drawRewards(rw, x, y, w) {
+    panel(this, x, y, w, 238, { fill: 0x18204a, header: 0x2a3a7a, headerH: 26 });
+    addText(this, x + 12, y + 13, 'RÉCOMPENSES', { size: 12.5, oy: 0.5, color: '#9fc6ff', depth: 2 });
+    if (!rw) return;
+    const rows = [];
+    const rowY = (i) => y + 50 + i * 40;
+    const reveal = (objs, delay, sound) => {
+      for (const o of objs) {
+        const a = o.alpha;
+        o.setAlpha(0);
+        this.tweens.add({ targets: o, alpha: a, delay, duration: 180 });
       }
-      this.addRig(f.charId, x + 32, ry - 3, 0.5, result.winner === team, 4);
-      fitWidth(addText(this, x + 58, ry - 7, def.name + (f.isPlayer ? ' (toi)' : ''), { size: 14, oy: 0.5 }), 126);
-      addText(this, x + 58, ry + 10, `${el.name} · ${def.role}`, { size: 10, oy: 0.5, color: hex(el.light), bold: false });
-      addText(this, cols[0], ry, `${f.kills}`, { size: 15, ox: 0.5, oy: 0.5 });
-      addText(this, cols[1], ry, `${f.damage}`, {
-        size: 13,
-        ox: 0.5,
+      this.time.delayedCall(delay, () => sfx.play(sound));
+    };
+
+    // 1. Trophées
+    {
+      const yy = rowY(0);
+      const ic = icon(this, 'trophy', x + 30, yy, 38, 3);
+      const label = addText(this, x + 58, yy - 8, 'Trophées', { size: 11, oy: 0.5, color: '#c9d3ee', bold: false, depth: 3 });
+      const val = addText(this, x + 58, yy + 8, fmt(rw.trophies.before), { size: 19, oy: 0.5, color: '#ffe27a', depth: 3 });
+      const d = rw.trophies.delta;
+      const delta = addText(this, x + w - 16, yy, d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '+0', {
+        size: 24,
+        ox: 1,
         oy: 0.5,
-        color: f.damage === best && best > 0 ? hex(COLORS.gold) : '#ffffff',
+        color: d > 0 ? '#b8ff9a' : d < 0 ? '#ff8f9a' : '#c9d3ee',
+        stroke: '#0a0d18',
+        strokeW: 5,
+        depth: 3,
       });
-      addText(this, cols[2], ry, `${f.crystals}`, { size: 15, ox: 0.5, oy: 0.5, color: '#bffcff' });
+      rows.push({ objs: [ic, label, val, delta], sound: d >= 0 ? 'trophy' : 'deny', after: () => {
+        countUp(this, val, rw.trophies.before, rw.trophies.after, 700);
+        this.tweens.add({ targets: delta, scale: 1.35, duration: 140, yoyo: true });
+        this.tweens.add({ targets: ic, angle: { from: -14, to: 14 }, duration: 90, yoyo: true, repeat: 2, onComplete: () => ic.setAngle(0) });
+      } });
+    }
+    // 2. Pièces
+    {
+      const yy = rowY(1);
+      const ic = icon(this, 'coin', x + 30, yy, 36, 3);
+      const label = addText(this, x + 58, yy - 8, 'Pièces', { size: 11, oy: 0.5, color: '#c9d3ee', bold: false, depth: 3 });
+      const val = addText(this, x + 58, yy + 8, fmt(rw.coins.before), { size: 19, oy: 0.5, depth: 3 });
+      const delta = addText(this, x + w - 16, yy, `+${rw.coins.delta}`, { size: 24, ox: 1, oy: 0.5, color: '#ffe27a', stroke: '#0a0d18', strokeW: 5, depth: 3 });
+      rows.push({ objs: [ic, label, val, delta], sound: 'coins', after: () => {
+        countUp(this, val, rw.coins.before, rw.coins.after, 700);
+        this.tweens.add({ targets: delta, scale: 1.3, duration: 140, yoyo: true });
+      } });
+    }
+    // 3. XP et niveau
+    {
+      const yy = rowY(2);
+      const ic = icon(this, 'xp', x + 30, yy, 36, 3);
+      const label = addText(this, x + 58, yy - 9, `Niveau ${rw.level.before}`, { size: 11, oy: 0.5, color: '#c9d3ee', bold: false, depth: 3 });
+      const b = bar(this, x + 58, yy + 1, w - 150, 11, rw.xp.before / rw.xp.neededBefore, 0x4db4ff, { depth: 3 });
+      const delta = addText(this, x + w - 16, yy, `+${rw.xp.gained} XP`, { size: 16, ox: 1, oy: 0.5, color: '#9fe0ff', stroke: '#0a0d18', strokeW: 4, depth: 3 });
+      rows.push({ objs: [ic, label, b.g, delta], sound: 'tick', after: () => {
+        const ups = rw.level.ups.length;
+        const state = { p: rw.xp.before / rw.xp.neededBefore };
+        const fill = (to, onDone) => this.tweens.add({ targets: state, p: to, duration: 520, ease: 'Cubic.easeOut', onUpdate: () => b.set(state.p), onComplete: onDone });
+        if (ups === 0) fill(rw.xp.after / rw.xp.neededAfter);
+        else {
+          // La barre se remplit, « NIVEAU SUPÉRIEUR », puis repart du début
+          fill(1, () => {
+            sfx.play('upgrade');
+            label.setText(`Niveau ${rw.level.after} !`).setColor('#b8ff9a');
+            this.tweens.add({ targets: [ic, label], scale: '*=1.3', duration: 150, yoyo: true });
+            const up = rw.level.ups[ups - 1];
+            delta.setText(`+${up.coins * ups}  pièces  +${up.gems * ups}  gemmes`).setFontSize(11).setColor('#b8ff9a');
+            state.p = 0;
+            fill(rw.xp.after / rw.xp.neededAfter);
+          });
+        }
+      } });
+    }
+    // 4. Points de saison
+    {
+      const yy = rowY(3);
+      const ic = icon(this, 'season', x + 30, yy, 34, 3);
+      const label = addText(this, x + 58, yy - 8, 'Pass de saison', { size: 11, oy: 0.5, color: '#c9d3ee', bold: false, depth: 3 });
+      const val = addText(this, x + 58, yy + 8, `${fmt(rw.pass.after)} points`, { size: 15, oy: 0.5, depth: 3, color: '#e3c8ff' });
+      const delta = addText(this, x + w - 16, yy, `+${rw.pass.delta}`, { size: 20, ox: 1, oy: 0.5, color: '#e3c8ff', stroke: '#0a0d18', strokeW: 5, depth: 3 });
+      rows.push({ objs: [ic, label, val, delta], sound: 'tick' });
+    }
+    // 5. Voie des Cristaux
+    {
+      const yy = rowY(4) + 2;
+      const { next, prevAt, best } = profile.roadProgress();
+      const objs = [];
+      const reached = rw.roadReached.length > 0;
+      objs.push(addText(this, x + 14, yy - 11, reached ? 'PALIER ATTEINT SUR LA VOIE DES CRISTAUX !' : 'Voie des Cristaux', {
+        size: reached ? 11.5 : 10.5,
+        oy: 0.5,
+        color: reached ? '#b8ff9a' : '#7df9ff',
+        depth: 3,
+      }));
+      if (next) {
+        const b = bar(this, x + 14, yy + 1, w - 86, 11, Math.max(0, (best - prevAt) / (next.at - prevAt)), 0xffc21f, { depth: 3 });
+        const record = best !== profile.totalTrophies ? 'Record ' : '';
+        objs.push(b.g, addText(this, x + 14 + (w - 86) / 2, yy + 6.5, `${record}${fmt(best)} / ${fmt(next.at)}`, { size: 9, ox: 0.5, oy: 0.5, depth: 4, stroke: '#0a0d18', strokeW: 3 }));
+        objs.push(icon(this, rewardFrame(next.reward), x + w - 36, yy - 1, next.reward.chest ? 42 : 30, 4));
+        objs.push(addText(this, x + w - 36, yy + 17, rewardLabel(next.reward), { size: 9, ox: 0.5, oy: 0.5, depth: 4, stroke: '#0a0d18', strokeW: 3 }));
+      } else {
+        objs.push(addText(this, x + 14, yy + 7, 'Tous les paliers sont atteints !', { size: 11, oy: 0.5, depth: 3 }));
+      }
+      rows.push({ objs, sound: reached ? 'reward-big' : 'tick' });
+    }
+
+    rows.forEach((row, i) => {
+      const delay = 500 + i * 420;
+      reveal(row.objs, delay, row.sound);
+      if (row.after) this.time.delayedCall(delay + 120, row.after);
     });
   }
 
-  button(x, y, w, h, label, color, shade, textColor, onTap) {
-    const g = this.add.graphics();
-    const paint = (pressed) => {
-      g.clear();
-      g.fillStyle(shade, 1);
-      g.fillRoundedRect(x, y + 4, w, h, 14);
-      g.fillStyle(color, pressed ? 0.8 : 1);
-      g.fillRoundedRect(x, y + (pressed ? 3 : 0), w, h, 14);
-    };
-    paint(false);
-    const t = addText(this, x + w / 2, y + h / 2, label, { size: 20, ox: 0.5, oy: 0.5, color: textColor });
-    this.buttons.add({
-      x,
-      y,
-      w,
-      h,
-      onPress: (pressed) => {
-        paint(pressed);
-        t.y = y + h / 2 + (pressed ? 3 : 0);
-      },
-      onTap,
+  // ── Tableau des scores ─────────────────────────────────────
+
+  drawScores(result, fighters, playerTeam, x, y, w) {
+    panel(this, x, y, w, 238, { fill: 0x18204a });
+    const best = Math.max(...fighters.map((f) => f.damage));
+    [playerTeam, 1 - playerTeam].forEach((team, k) => {
+      const col = TEAM_COLORS[team];
+      const ty = y + 6 + k * 116;
+      const g = this.add.graphics().setDepth(2);
+      g.fillStyle(col.dark, 1);
+      g.fillRoundedRect(x + 6, ty, w - 12, 22, 9);
+      addText(this, x + 16, ty + 11, k === 0 ? 'VOTRE ÉQUIPE' : 'ADVERSAIRES', { size: 11, oy: 0.5, depth: 3 });
+      addText(this, x + w - 14, ty + 11, `${result.crystals[team]} crist. · ${result.kills[team]} élim.`, { size: 10, ox: 1, oy: 0.5, color: hex(col.light), depth: 3 });
+      fighters
+        .filter((f) => f.team === team)
+        .forEach((f, i) => {
+          const fy = ty + 38 + i * 27;
+          if (f.isPlayer) {
+            g.fillStyle(0xffffff, 0.09);
+            g.fillRoundedRect(x + 6, fy - 12, w - 12, 25, 8);
+          }
+          this.add.image(x + 24, fy + 1, `char_${f.charId}`, 'head').setScale(0.085).setDepth(3);
+          for (const s of [-1, 1]) this.add.image(x + 24 + s * 2.65 + 0.2, fy + 3.5, `char_${f.charId}`, 'pupil').setScale(0.085).setDepth(3.1);
+          fitWidth(addText(this, x + 44, fy, CHARACTERS[f.charId].name + (f.isPlayer ? ' (toi)' : ''), { size: 12.5, oy: 0.5, depth: 3 }), 96);
+          addText(this, x + w - 96, fy, `${f.kills} élim.`, { size: 10.5, ox: 0.5, oy: 0.5, depth: 3, color: '#c9d3ee' });
+          addText(this, x + w - 16, fy, fmt(f.damage), { size: 12, ox: 1, oy: 0.5, depth: 3, color: f.damage === best && best > 0 ? '#ffe27a' : '#ffffff' });
+        });
     });
   }
 }

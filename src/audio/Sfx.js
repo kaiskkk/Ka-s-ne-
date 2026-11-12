@@ -218,7 +218,49 @@ class Sfx {
         this.tone({ type: 'square', f0: 980, dur: 0.05, vol: 0.1 * v });
         break;
       case 'click':
-        this.tone({ type: 'triangle', f0: 640, f1: 760, dur: 0.06, vol: 0.18 * v });
+        this.tone({ type: 'triangle', f0: 640, f1: 820, dur: 0.06, vol: 0.2 * v });
+        this.noise({ dur: 0.03, vol: 0.06 * v, freq: 4000, type: 'highpass' });
+        break;
+      // ── Sons des menus ──
+      case 'pop':
+        this.tone({ type: 'sine', f0: 420, f1: 880, dur: 0.08, vol: 0.2 * v });
+        break;
+      case 'deny':
+        this.tone({ type: 'square', f0: 190, f1: 150, dur: 0.09, vol: 0.12 * v });
+        this.tone({ type: 'square', f0: 150, f1: 110, dur: 0.12, vol: 0.12 * v, delay: 0.1 });
+        break;
+      case 'play':
+        this.tone({ type: 'sawtooth', f0: 260, f1: 1040, dur: 0.22, vol: 0.16 * v });
+        this.tone({ type: 'triangle', f0: 523, dur: 0.12, vol: 0.2 * v, delay: 0.18 });
+        this.tone({ type: 'triangle', f0: 784, dur: 0.22, vol: 0.2 * v, delay: 0.27 });
+        break;
+      case 'buy':
+        this.tone({ type: 'triangle', f0: 1175, dur: 0.07, vol: 0.2 * v });
+        this.tone({ type: 'triangle', f0: 1568, dur: 0.14, vol: 0.2 * v, delay: 0.07 });
+        break;
+      case 'coins':
+        [1319, 1568, 1976, 2349].forEach((f, i) => this.tone({ type: 'triangle', f0: f, dur: 0.07, vol: 0.14 * v, delay: i * 0.06 }));
+        break;
+      case 'trophy':
+        this.tone({ type: 'triangle', f0: 988, dur: 0.12, vol: 0.22 * v });
+        this.tone({ type: 'triangle', f0: 1319, dur: 0.3, vol: 0.22 * v, delay: 0.1 });
+        break;
+      case 'reward':
+        this.tone({ type: 'triangle', f0: 784, dur: 0.1, vol: 0.22 * v });
+        this.tone({ type: 'triangle', f0: 1175, dur: 0.22, vol: 0.22 * v, delay: 0.09 });
+        break;
+      case 'reward-big':
+        [659, 880, 1175, 1568].forEach((f, i) => this.tone({ type: 'triangle', f0: f, dur: 0.3, vol: 0.2 * v, delay: i * 0.08 }));
+        this.noise({ dur: 0.4, vol: 0.1 * v, freq: 7000, f1: 3000, type: 'highpass', delay: 0.24 });
+        break;
+      case 'upgrade':
+        [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone({ type: 'square', f0: f, dur: 0.1, vol: 0.1 * v, delay: i * 0.06 }));
+        this.tone({ type: 'triangle', f0: 1568, dur: 0.4, vol: 0.2 * v, delay: 0.3 });
+        break;
+      case 'chest':
+        this.noise({ dur: 0.5, vol: 0.3 * v, freq: 400, f1: 6000, type: 'bandpass' });
+        this.tone({ f0: 140, f1: 50, dur: 0.3, vol: 0.4 * v });
+        [523, 784, 1047, 1568].forEach((f, i) => this.tone({ type: 'triangle', f0: f, dur: 0.5, vol: 0.14 * v, delay: 0.08 + i * 0.05 }));
         break;
       case 'empty':
         this.tone({ type: 'square', f0: 140, dur: 0.06, vol: 0.1 * v });

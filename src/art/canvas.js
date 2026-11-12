@@ -64,6 +64,18 @@ export function blob(ctx, pts) {
   ctx.closePath();
 }
 
+/** Étoile à n branches centrée en (0, 0). */
+export function star(ctx, n, rOuter, rInner, rot = -Math.PI / 2) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 ? rInner : rOuter;
+    const a = rot + (i / (n * 2)) * TAU;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+}
+
 /** Remplit puis trace le chemin courant (contour arrondi façon dessin animé). */
 export function paint(ctx, fill, stroke, lineWidth = 2) {
   if (fill) {

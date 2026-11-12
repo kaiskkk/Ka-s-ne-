@@ -13,6 +13,7 @@ import { music } from '../audio/Music.js';
 import { sfx } from '../audio/Sfx.js';
 import { COMBAT, FUSION, SIM_DT, VIEW } from '../config/constants.js';
 import { ELEMENTS, TEAM_COLORS } from '../config/elements.js';
+import { profile } from '../meta/profile.js';
 import { ArenaView, DEPTH } from '../render/ArenaView.js';
 import { Effects } from '../render/Effects.js';
 import { CrystalLayer, ProjectileLayer, StrikeLayer, ZoneLayer, visualColor } from '../render/EntityViews.js';
@@ -49,6 +50,8 @@ export class GameScene extends Phaser.Scene {
       playerChar: this.cfg.charId,
       difficulty: this.cfg.difficulty,
       seed: this.cfg.seed,
+      // Le niveau du personnage (amélioré dans le menu) renforce PV et dégâts
+      playerPower: profile.power(this.cfg.charId),
     });
     this.player = this.match.player;
     this.acc = 0;
@@ -596,6 +599,13 @@ export class GameScene extends Phaser.Scene {
     const { match, player } = this;
     const result = match.result;
     const outcome = result.winner < 0 ? 'draw' : result.winner === player.team ? 'win' : 'lose';
+    // Les récompenses sont enregistrées tout de suite (rien n'est perdu si on ferme le jeu maintenant)
+    const rewards = profile.applyMatchResult({
+      outcome,
+      charId: this.cfg.charId,
+      difficulty: this.cfg.difficulty,
+      kills: player.kills,
+    });
     music.stop();
     this.time.delayedCall(450, () => sfx.play(outcome === 'lose' ? 'lose' : 'win'));
     this.time.delayedCall(2000, () => {
@@ -603,6 +613,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('Result', {
         outcome,
         result,
+        rewards,
         charId: this.cfg.charId,
         difficulty: this.cfg.difficulty,
         fighters: match.fighters.map((f) => ({
