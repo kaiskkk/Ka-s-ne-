@@ -15,6 +15,7 @@
 //  sécurité de l'iPhone (encoche, Dynamic Island, barre d'accueil).
 // ─────────────────────────────────────────────────────────────
 import * as Phaser from 'phaser';
+import { music } from '../audio/Music.js';
 import { sfx } from '../audio/Sfx.js';
 import { ARENA_EVENT, CRYSTAL, MATCH } from '../config/constants.js';
 import { ARENA_EVENTS } from '../config/arenaEvents.js';
@@ -22,7 +23,7 @@ import { ELEMENTS, TEAM_COLORS } from '../config/elements.js';
 import { getFusion } from '../config/fusions.js';
 import { TAU, clamp } from '../sim/mathx.js';
 import { controls } from '../ui/controls.js';
-import { COLORS, addText, formatTime, hex, textResFor } from '../ui/theme.js';
+import { COLORS, addText, fitWidth, formatTime, hex, textResFor } from '../ui/theme.js';
 import { uiCamera, viewport } from '../ui/viewport.js';
 
 const DEAD_ZONE = 0.28; // en dessous, le joystick de visée est considéré « au repos »
@@ -78,6 +79,7 @@ export class HudScene extends Phaser.Scene {
     // Événements venus de la partie
     this.gs.events.on('fx', this.onFx, this);
     this.gs.events.on('paused', this.onPaused, this);
+    this.gs.events.on('playerHurt', this.onHurt, this);
     this.onViewport = () => this.layout();
     this.game.events.on('viewport-changed', this.onViewport);
 
@@ -87,6 +89,7 @@ export class HudScene extends Phaser.Scene {
       window.removeEventListener('blur', this.onBlur);
       this.gs.events.off('fx', this.onFx, this);
       this.gs.events.off('paused', this.onPaused, this);
+      this.gs.events.off('playerHurt', this.onHurt, this);
       this.game.events.off('viewport-changed', this.onViewport);
       controls.reset();
     });
@@ -99,6 +102,10 @@ export class HudScene extends Phaser.Scene {
 
   build() {
     const D = { hud: 10, top: 20, banner: 30, pause: 50 };
+
+    // Bords d'écran rouges : flash quand on est touché, pulsation quand la vie est basse
+    this.vignette = this.add.image(0, 0, 'vignette').setOrigin(0, 0).setTint(0xff2433).setAlpha(0).setDepth(D.hud - 2);
+    this.hurt = 0;
 
     // Indicateurs hors écran (cristaux, porteurs)
     this.arrows = this.add.graphics().setDepth(D.hud - 1);
@@ -123,8 +130,11 @@ export class HudScene extends Phaser.Scene {
 
     // Boutons Super et Fusion
     this.buttonsG = this.add.graphics().setDepth(D.hud);
-    this.superLabel = addText(this, 0, 0, 'SUPER', { size: 12, ox: 0.5, oy: 0.5, depth: D.hud + 1 });
-    this.fusionLabel = addText(this, 0, 0, 'FUSION', { size: 12, ox: 0.5, oy: 0.5, depth: D.hud + 1 });
+    this.superIcon = this.add.image(0, 0, 'fx', `em_${this.player.element}`).setDepth(D.hud + 0.5);
+    this.fusionIconA = this.add.image(0, 0, 'fx', `em_${this.player.element}`).setDepth(D.hud + 0.5).setVisible(false);
+    this.fusionIconB = this.add.image(0, 0, 'fx', 'em_feu').setDepth(D.hud + 0.6).setVisible(false);
+    this.superLabel = addText(this, 0, 0, 'SUPER', { size: 11, ox: 0.5, oy: 0.5, stroke: '#0a0d18', strokeW: 3, depth: D.hud + 1 });
+    this.fusionLabel = addText(this, 0, 0, 'FUSION', { size: 11, ox: 0.5, oy: 0.5, stroke: '#0a0d18', strokeW: 3, depth: D.hud + 1 });
     this.fusionName = addText(this, 0, 0, '', {
       size: 13,
       ox: 0.5,
@@ -192,6 +202,15 @@ export class HudScene extends Phaser.Scene {
     });
     this.flashRect = this.add.rectangle(0, 0, 10, 10, 0xffffff, 1).setOrigin(0, 0).setDepth(D.banner - 1).setAlpha(0);
 
+    // Grande annonce de FUSION : les emblèmes des deux éléments se percutent
+    this.fxBand = this.add.graphics().setDepth(D.banner + 2).setAlpha(0);
+    this.fxA = this.add.image(0, 0, 'fx', 'em_feu').setDepth(D.banner + 4).setVisible(false);
+    this.fxB = this.add.image(0, 0, 'fx', 'em_eau').setDepth(D.banner + 4).setVisible(false);
+    this.fxTag = addText(this, 0, 0, '', { size: 15, ox: 0.5, oy: 0.5, stroke: '#0a0d18', strokeW: 4, depth: D.banner + 3 });
+    this.fxName = addText(this, 0, 0, '', { size: 34, ox: 0.5, oy: 0.5, stroke: '#0a0d18', strokeW: 7, depth: D.banner + 3 });
+    this.fxTag.setAlpha(0);
+    this.fxName.setAlpha(0);
+
     // Journal des éliminations (en haut à droite)
     this.feedTexts = [0, 1, 2].map(() =>
       addText(this, 0, 0, '', { size: 12, ox: 1, oy: 0, stroke: '#0a0d18', strokeW: 3, depth: D.top }),
@@ -228,8 +247,11 @@ export class HudScene extends Phaser.Scene {
 
     this.superBtn = { x: this.aimRest.x - 124 * u, y: this.aimRest.y + 18 * u, r: 33 * u };
     this.fusionBtn = { x: this.aimRest.x - 78 * u, y: this.aimRest.y - 114 * u, r: 36 * u };
-    this.superLabel.setPosition(this.superBtn.x, this.superBtn.y);
-    this.fusionLabel.setPosition(this.fusionBtn.x, this.fusionBtn.y);
+    this.superLabel.setPosition(this.superBtn.x, this.superBtn.y + this.superBtn.r - 7);
+    this.fusionLabel.setPosition(this.fusionBtn.x, this.fusionBtn.y + this.fusionBtn.r - 7);
+    this.superIcon.setPosition(this.superBtn.x, this.superBtn.y - 3);
+    this.iconScale = (this.superBtn.r * 1.25) / 162; // l'emblème fait 162 px dans l'atlas
+    this.vignette.setDisplaySize(W, H);
     this.fusionName.setPosition(this.fusionBtn.x, this.fusionBtn.y - this.fusionBtn.r - 6);
 
     this.topY = s.top + 24;
@@ -577,8 +599,10 @@ export class HudScene extends Phaser.Scene {
       g.lineStyle(2, 0xffffff, 0.3);
       g.strokeCircle(sb.x, sb.y, sb.r);
     }
-    this.setShown('superColor', ready ? '#3a2a00' : '#ffffff', (c) => this.superLabel.setColor(c));
-    this.superLabel.setAlpha(ready ? 1 : 0.6);
+    this.superLabel.setAlpha(ready ? 1 : 0.7);
+    this.superIcon
+      .setScale(this.iconScale * (ready ? 1.05 + 0.08 * pulse : 0.92))
+      .setAlpha(ready ? 1 : 0.45);
 
     // FUSION : s'allume aux couleurs des deux éléments quand elle est possible
     const fb = this.fusionBtn;
@@ -595,6 +619,11 @@ export class HudScene extends Phaser.Scene {
       g.fillPath();
       g.lineStyle(3, 0xffffff, 1);
       g.strokeCircle(fb.x, fb.y, fb.r);
+      // Les emblèmes des deux éléments, côte à côte
+      const k = this.iconScale * (0.78 + 0.06 * pulse);
+      this.fusionIconA.setVisible(true).setPosition(fb.x - fb.r * 0.36, fb.y - 4).setScale(k);
+      this.setShown('fusionIconB', partner.element, (el) => this.fusionIconB.setFrame(`em_${el}`));
+      this.fusionIconB.setVisible(true).setPosition(fb.x + fb.r * 0.36, fb.y - 4).setScale(k);
       this.setShown('fusionName', `${fu.name}\navec ${partner.def.name}`, (t) => this.fusionName.setText(t));
       this.fusionName.setVisible(true);
       this.fusionLabel.setAlpha(1);
@@ -607,7 +636,9 @@ export class HudScene extends Phaser.Scene {
       const mate = ready && this.match.fighters.find((o) => o !== p && o.team === p.team && o.alive && o.superReady);
       this.setShown('fusionName', mate ? `Rapproche-toi\nde ${mate.def.name} !` : '', (t) => this.fusionName.setText(t));
       this.fusionName.setVisible(!!mate);
-      this.fusionLabel.setAlpha(0.3);
+      this.fusionLabel.setAlpha(0.35);
+      this.fusionIconA.setVisible(false);
+      this.fusionIconB.setVisible(false);
     }
   }
 
@@ -657,6 +688,11 @@ export class HudScene extends Phaser.Scene {
         this.bannerSub.setText('');
       }
     }
+
+    // Vignette rouge : flash des dégâts + pulsation quand la vie est basse
+    this.hurt = Math.max(0, this.hurt - dt * 2.6);
+    const low = player.alive && player.hp / player.maxHp < 0.3 ? 0.22 + 0.14 * Math.sin(this.time.now * 0.008) : 0;
+    this.vignette.setAlpha(Math.min(0.85, Math.max(this.hurt, low)));
 
     // Réapparition
     let respawn = '';
@@ -746,6 +782,90 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 320 });
   }
 
+  onHurt(amount) {
+    this.hurt = Math.min(0.9, Math.max(this.hurt, 0.45 + amount / 2000));
+  }
+
+  /**
+   * Grande annonce de FUSION : un bandeau traverse l'écran, les emblèmes des
+   * deux éléments foncent l'un vers l'autre, se percutent dans un flash, et le
+   * nom du combo jaillit. (Le monde, lui, passe au ralenti : voir GameScene.)
+   */
+  playFusion(e) {
+    const { match, player } = this;
+    const ally = e.team === player.team;
+    const a = match.fighters[e.a];
+    const b = match.fighters[e.b];
+    const W = this.W;
+    const y = Math.max(this.topY + 86, this.H * 0.3);
+    const color = ally ? COLORS.fusion : TEAM_COLORS[1].main;
+    const parts = [this.fxBand, this.fxA, this.fxB, this.fxTag, this.fxName];
+    this.tweens.killTweensOf(parts);
+
+    // Bandeau incliné
+    const g = this.fxBand;
+    g.clear();
+    g.fillStyle(0x0a0d18, 0.93);
+    g.fillPoints(
+      [
+        { x: -20, y: y - 34 },
+        { x: W + 20, y: y - 48 },
+        { x: W + 20, y: y + 34 },
+        { x: -20, y: y + 48 },
+      ],
+      true,
+    );
+    g.lineStyle(4, ELEMENTS[a.element].color, 1);
+    g.lineBetween(-20, y - 34, W + 20, y - 48);
+    g.lineStyle(4, ELEMENTS[b.element].color, 1);
+    g.lineBetween(-20, y + 48, W + 20, y + 34);
+    g.setAlpha(0);
+    this.tweens.add({ targets: g, alpha: 1, duration: 120 });
+
+    const k = 64 / 162;
+    this.fxA.setFrame(`em_${a.element}`).setPosition(-70, y).setScale(k).setAlpha(1).setVisible(true).setRotation(0);
+    this.fxB.setFrame(`em_${b.element}`).setPosition(W + 70, y).setScale(k).setAlpha(1).setVisible(true).setRotation(0);
+    this.fxName.setText(e.name.toUpperCase()).setColor(hex(color)).setPosition(W / 2, y + 8).setAlpha(0).setScale(0.2);
+    fitWidth(this.fxName, W - 280);
+    const nameScale = this.fxName.scale;
+    this.fxName.setScale(0.2);
+    this.fxTag
+      .setText(ally ? `FUSION !  ${a.def.name} + ${b.def.name}` : `FUSION ENNEMIE !  ${a.def.name} + ${b.def.name}`)
+      .setPosition(W / 2, y - 26)
+      .setAlpha(0);
+
+    // 1. Les emblèmes foncent l'un vers l'autre…
+    this.tweens.add({ targets: this.fxA, x: W / 2 - 22, rotation: Math.PI * 2, duration: 300, ease: 'Cubic.easeIn' });
+    this.tweens.add({
+      targets: this.fxB,
+      x: W / 2 + 22,
+      rotation: -Math.PI * 2,
+      duration: 300,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        // 2. … se percutent : flash, puis s'écartent pour laisser jaillir le nom
+        this.flash(ally ? 0xffffff : TEAM_COLORS[1].main, ally ? 0.55 : 0.35);
+        const half = (this.fxName.width * nameScale) / 2 + 46;
+        this.tweens.add({ targets: this.fxA, x: W / 2 - half, scale: k * 1.15, duration: 260, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: this.fxB, x: W / 2 + half, scale: k * 1.15, duration: 260, ease: 'Back.easeOut' });
+        this.fxName.setAlpha(1);
+        this.tweens.add({ targets: this.fxName, scale: nameScale, duration: 280, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: this.fxTag, alpha: 1, duration: 160 });
+        // 3. Tout s'efface
+        this.tweens.add({
+          targets: parts,
+          alpha: 0,
+          delay: 1250,
+          duration: 280,
+          onComplete: () => {
+            this.fxA.setVisible(false);
+            this.fxB.setVisible(false);
+          },
+        });
+      },
+    });
+  }
+
   refreshFeed() {
     this.feedTexts.forEach((t, i) => {
       const f = this.feed[i];
@@ -764,18 +884,9 @@ export class HudScene extends Phaser.Scene {
         this.showBig('GO !', COLORS.gold, 600);
         this.tweens.add({ targets: this.hint, alpha: 0, delay: 2200, duration: 500 });
         break;
-      case 'fusion': {
-        const ally = e.team === player.team;
-        const a = match.fighters[e.a];
-        const b = match.fighters[e.b];
-        this.showBanner(
-          `FUSION : ${e.name.toUpperCase()}`,
-          `${a.def.name} + ${b.def.name}${ally ? '' : ' — fusion ennemie !'}`,
-          ally ? COLORS.fusion : TEAM_COLORS[1].main,
-        );
-        this.flash(ally ? 0xffffff : TEAM_COLORS[1].main, ally ? 0.4 : 0.25);
+      case 'fusion':
+        this.playFusion(e);
         break;
-      }
       case 'arenaEvent': {
         const def = ARENA_EVENTS[e.id];
         if (e.phase === 'warning') this.showBanner(`ARÈNE VIVANTE : ${def.name.toUpperCase()}`, def.hint, def.color, 3.4);
@@ -832,7 +943,7 @@ export class HudScene extends Phaser.Scene {
     this.pauseButtons = [];
     const { W, H } = this;
     const pw = 300;
-    const ph = 236;
+    const ph = 290;
     const px = W / 2 - pw / 2;
     const py = H / 2 - ph / 2;
     layer.add(this.add.rectangle(0, 0, W, H, 0x05070f, 0.72).setOrigin(0, 0));
@@ -856,7 +967,12 @@ export class HudScene extends Phaser.Scene {
       sfx.toggle();
       this.buildPauseMenu();
     });
-    button(2, 'Quitter le match', 0xa83246, () => {
+    button(2, music.enabled ? 'Musique : activée' : 'Musique : coupée', COLORS.panelLight, () => {
+      music.toggle();
+      this.buildPauseMenu();
+    });
+    button(3, 'Quitter le match', 0xa83246, () => {
+      music.stop();
       this.scene.stop('Game');
       this.scene.start('Menu');
     });

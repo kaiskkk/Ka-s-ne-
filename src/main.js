@@ -1,9 +1,13 @@
 // ─────────────────────────────────────────────────────────────
 //  ÉLÉMENTA — point d'entrée : démarre Phaser et prépare l'écran.
 // ─────────────────────────────────────────────────────────────
+import '@fontsource/fredoka/latin-500.css';
+import '@fontsource/fredoka/latin-700.css';
 import * as Phaser from 'phaser';
+import { music } from './audio/Music.js';
 import { sfx } from './audio/Sfx.js';
 import { registerServiceWorker } from './pwa/registerServiceWorker.js';
+import { CharacterRig } from './render/CharacterRig.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
@@ -62,6 +66,8 @@ function start() {
       game,
       controls,
       sfx,
+      music,
+      CharacterRig,
       get match() {
         const scene = game.scene.getScene('Game');
         return scene && scene.scene.isActive() ? scene.match : null;
@@ -77,12 +83,23 @@ function start() {
     });
   }
 
-  registerServiceWorker();
+  // Nouvelle version déployée : le jeu se recharge tout seul, mais jamais en plein match
+  registerServiceWorker(() => game.scene.isActive('Menu'));
 }
 
-try {
-  start();
-} catch (err) {
-  console.error(err);
-  showError('Impossible de démarrer ÉLÉMENTA sur ce navigateur. Essaie de mettre à jour Safari / Chrome.');
+/** Attend que la police du jeu soit prête (sinon les premiers textes s'afficheraient avec une police de secours). */
+function loadFonts() {
+  if (!document.fonts || !document.fonts.load) return Promise.resolve();
+  const wanted = ['500', '700'].map((w) => document.fonts.load(`${w} 16px Fredoka`, 'ÉLÉMENTA 0123'));
+  const timeout = new Promise((resolve) => setTimeout(resolve, 2500));
+  return Promise.race([Promise.all(wanted), timeout]).catch(() => {});
 }
+
+loadFonts().then(() => {
+  try {
+    start();
+  } catch (err) {
+    console.error(err);
+    showError('Impossible de démarrer ÉLÉMENTA sur ce navigateur. Essaie de mettre à jour Safari / Chrome.');
+  }
+});

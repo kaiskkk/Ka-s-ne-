@@ -609,7 +609,7 @@ test('événement lave : avertit, brûle, puis disparaît', () => {
   isolate(m, [f]);
   m.director.begin('lave');
   const tiles = m.director.current.tiles;
-  assert.ok(tiles.length >= 12, `assez de lave (${tiles.length})`);
+  assert.ok(tiles.length >= 6 && tiles.length <= 20, `un peu de lave, pas trop (${tiles.length})`);
   const { cols } = m.arena;
   for (const i of tiles) {
     assert.equal(m.arena.lava[i], LAVA_WARN);

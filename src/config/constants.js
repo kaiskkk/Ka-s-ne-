@@ -57,7 +57,7 @@ export const ARENA_EVENT = {
 
 /** Vue caméra : hauteur du monde visible (px monde) et largeur minimale garantie. */
 export const VIEW = {
-  height: 720,
-  minWidth: 1100,
+  height: 540, // ~8,5 cases de haut : les personnages sont bien visibles sur un téléphone
+  minWidth: 880,
   maxDpr: 2, // plafond de densité de pixels (performances iPhone)
 };

@@ -2,52 +2,52 @@
 //  Vues des entités : projectiles, zones d'effet, frappes annoncées, cristaux.
 //  Chaque « couche » synchronise ses objets Phaser avec la simulation.
 // ─────────────────────────────────────────────────────────────
+import { FX_SCALE } from '../art/fxArt.js';
 import { TEAM_NEUTRAL } from '../config/constants.js';
 import { TEAM_COLORS } from '../config/elements.js';
 import { TAU, lerp } from '../sim/mathx.js';
-import { drawCrystal } from '../ui/shapes.js';
 import { COLORS, addText } from '../ui/theme.js';
 import { DEPTH } from './ArenaView.js';
+import { ELEMENT_COLORS } from './Effects.js';
 
-/** Couleurs des projectiles et des effets, par type visuel. */
-export const VISUALS = {
-  feu: { color: 0xff7a2a, glow: 0xffc070 },
-  eau: { color: 0x3fb0ff, glow: 0xb8e6ff },
-  terre: { color: 0xc49a66, glow: 0xe8cfa8 },
-  foudre: { color: 0xffe84d, glow: 0xffffff },
-  vent: { color: 0x9df5dd, glow: 0xffffff },
-  magma: { color: 0xff4a12, glow: 0xffb13a },
-  plasma: { color: 0xd96bff, glow: 0xffd6ff },
-  seisme: { color: 0xc49a66, glow: 0xffe84d },
-  meteore: { color: 0xff4a12, glow: 0xffb13a },
+/** Apparence des projectiles : image, halo, rotation sur eux-mêmes (tours/s), scintillement. */
+const PROJECTILES = {
+  feu: { frame: 'p_feu', glow: 0xff8a2a, size: 1.15 },
+  eau: { frame: 'p_eau', glow: 0x6cc6ff, size: 1.15 },
+  terre: { frame: 'p_terre', glow: 0, spin: 11, size: 1.1 },
+  foudre: { frame: 'p_foudre', glow: 0xfff27a, flicker: true, size: 1.15 },
+  vent: { frame: 'p_vent', glow: 0xc4f7e8, spin: 20, size: 1.1 },
+  magma: { frame: 'p_magma', glow: 0xff7a1f, spin: 4, size: 1.05 },
+  plasma: { frame: 'p_plasma', glow: 0xd96bff, spin: 7, size: 1.05 },
 };
 
-export function visualOf(key) {
-  return VISUALS[key] || VISUALS.feu;
+export function visualColor(key) {
+  return ELEMENT_COLORS[key] || ELEMENT_COLORS.feu;
 }
 
 // ── Projectiles ──────────────────────────────────────────────
 
 export class ProjectileLayer {
-  constructor(scene) {
+  constructor(scene, effects) {
     this.scene = scene;
+    this.effects = effects;
     this.views = new Map();
     this.pool = [];
     this.frame = 0;
   }
 
-  sync(projectiles, alpha) {
+  sync(projectiles, alpha, dt) {
     this.frame += 1;
     for (const p of projectiles) {
       let v = this.views.get(p.id);
       if (!v) {
         v = this.pool.pop() || this.create();
-        const vis = visualOf(p.visual);
-        const big = p.visual === 'magma' || p.visual === 'plasma';
-        v.core.setTint(vis.color).setDisplaySize(p.r * (big ? 2.4 : 3.2), p.r * 2.2);
-        v.glow.setTint(vis.glow).setDisplaySize(p.r * 5.5, p.r * 5.5);
-        v.core.setRotation(Math.atan2(p.vy, p.vx)).setVisible(true);
-        v.glow.setVisible(true);
+        const spec = PROJECTILES[p.visual] || PROJECTILES.feu;
+        v.spec = spec;
+        v.angle = Math.atan2(p.vy, p.vx);
+        v.core.setFrame(spec.frame).setScale(spec.size / FX_SCALE).setRotation(v.angle).setVisible(true).setFlipY(false);
+        v.glow.setVisible(!!spec.glow);
+        if (spec.glow) v.glow.setTint(spec.glow).setDisplaySize(p.r * 6.5, p.r * 6.5);
         this.views.set(p.id, v);
       }
       v.frame = this.frame;
@@ -55,6 +55,10 @@ export class ProjectileLayer {
       const y = lerp(p.py, p.y, alpha);
       v.core.setPosition(x, y);
       v.glow.setPosition(x, y);
+      if (v.spec.spin) v.core.rotation += v.spec.spin * dt;
+      if (v.spec.flicker) v.core.setFlipY(Math.random() < 0.5).setScale((v.spec.size / FX_SCALE) * (0.9 + Math.random() * 0.25));
+      // Traînée de particules de l'élément
+      if ((this.frame + p.id) % 2 === 0) this.effects.trailAt(p.visual, x, y);
     }
     for (const [id, v] of this.views) {
       if (v.frame === this.frame) continue;
@@ -66,25 +70,26 @@ export class ProjectileLayer {
   }
 
   create() {
-    const glow = this.scene.add.image(0, 0, 'dot').setDepth(DEPTH.projectile).setBlendMode('ADD').setAlpha(0.75);
-    const core = this.scene.add.image(0, 0, 'disc').setDepth(DEPTH.projectile + 0.1);
+    const glow = this.scene.add.image(0, 0, 'dot').setDepth(DEPTH.projectile).setBlendMode('ADD').setAlpha(0.7);
+    const core = this.scene.add.image(0, 0, 'fx', 'p_feu').setDepth(DEPTH.projectile + 0.1);
     return { core, glow, frame: 0 };
   }
 }
 
 // ── Zones ────────────────────────────────────────────────────
 
+/** Couleurs et particules de chaque type de zone : [émetteur, particules/s, teinte]. */
 const ZONE_STYLE = {
-  source: { fill: 0x4dffb8, alpha: 0.2, ring: 0x4dffb8 },
-  brasier: { fill: 0xff6a1f, alpha: 0.3, ring: 0xffb13a },
-  lave: { fill: 0xff4a12, alpha: 0.55, ring: 0xffb13a },
-  marecage: { fill: 0x5d7030, alpha: 0.5, ring: 0x9bb84f },
-  maree: { fill: 0x2f7bff, alpha: 0.34, ring: 0xffe84d },
-  vapeur: { fill: 0xe8eef5, alpha: 0.42, ring: 0xffffff, cloud: true },
-  tornade: { fill: 0xff6a1f, alpha: 0.28, ring: 0xffd24a, cloud: true },
-  blizzard: { fill: 0xbfe9ff, alpha: 0.28, ring: 0xffffff, cloud: true },
-  sable: { fill: 0xd9b36a, alpha: 0.36, ring: 0xf0d9a0, cloud: true },
-  cyclone: { fill: 0x7d6bff, alpha: 0.24, ring: 0xc4f7e8, cloud: true },
+  source: { fill: 0x4dffb8, alpha: 0.2, ring: 0x4dffb8, emit: [['plus', 7]] },
+  brasier: { fill: 0xff6a1f, alpha: 0.3, ring: 0xffb13a, emit: [['flame', 16]] },
+  lave: { fill: 0xff4a12, alpha: 0.5, ring: 0xffb13a, emit: [['flame', 9]] },
+  marecage: { fill: 0x5d7030, alpha: 0.5, ring: 0x9bb84f, emit: [['bubble', 9, 0xb6d86a]] },
+  maree: { fill: 0x2f7bff, alpha: 0.34, ring: 0xffe84d, emit: [['bolt', 9], ['drop', 5]] },
+  vapeur: { fill: 0xe8eef5, alpha: 0.42, ring: 0xffffff, cloud: true, emit: [['puff', 18, 0xffffff]] },
+  tornade: { fill: 0xff6a1f, alpha: 0.26, ring: 0xffd24a, cloud: true, emit: [['flame', 34], ['wind', 8, 0xffd9a0]] },
+  blizzard: { fill: 0xbfe9ff, alpha: 0.28, ring: 0xffffff, cloud: true, emit: [['snow', 26]] },
+  sable: { fill: 0xd9b36a, alpha: 0.34, ring: 0xf0d9a0, cloud: true, emit: [['sand', 30], ['dust', 6]] },
+  cyclone: { fill: 0x7d6bff, alpha: 0.24, ring: 0xc4f7e8, cloud: true, emit: [['wind', 22, 0xe6dcff], ['bolt', 6]] },
 };
 
 function seeded(i, k) {
@@ -93,25 +98,43 @@ function seeded(i, k) {
 }
 
 export class ZoneLayer {
-  constructor(scene, localTeam) {
+  constructor(scene, localTeam, effects) {
     this.scene = scene;
     this.localTeam = localTeam;
+    this.effects = effects;
     this.views = new Map();
     this.frame = 0;
   }
 
-  sync(zones, alpha, time) {
+  sync(zones, alpha, time, dt) {
     this.frame += 1;
     for (const z of zones) {
       let g = this.views.get(z.id);
       const style = ZONE_STYLE[z.kind] || ZONE_STYLE.brasier;
       if (!g) {
         g = this.scene.add.graphics().setDepth(style.cloud ? DEPTH.cloud : DEPTH.zone);
+        g.acc = 0;
         this.views.set(z.id, g);
       }
       g.frame = this.frame;
-      g.setPosition(lerp(z.px, z.x, alpha), lerp(z.py, z.y, alpha));
+      const x = lerp(z.px, z.x, alpha);
+      const y = lerp(z.py, z.y, alpha);
+      g.setPosition(x, y);
       this.draw(g, z, style, time);
+      // Particules propres à la zone
+      g.acc += dt;
+      if (g.acc >= 0.05) {
+        for (const [kind, rate, tint] of style.emit) {
+          let n = rate * g.acc;
+          n = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
+          for (let i = 0; i < n; i++) {
+            const a = Math.random() * TAU;
+            const d = Math.sqrt(Math.random()) * z.r * 0.92;
+            this.effects.burst(kind, x + Math.cos(a) * d, y + Math.sin(a) * d, 1, tint ?? null);
+          }
+        }
+        g.acc = 0;
+      }
     }
     for (const [id, g] of this.views) {
       if (g.frame === this.frame) continue;
@@ -146,14 +169,14 @@ export class ZoneLayer {
         for (let i = 0; i < 4; i++) {
           const a0 = t * spin + (i / 4) * TAU;
           const rr = r * (0.35 + 0.2 * i);
-          g.lineStyle(z.kind === 'tornade' ? 9 : 5, i % 2 ? style.ring : style.fill, 0.75 * fade);
+          g.lineStyle(z.kind === 'tornade' ? 10 : 6, i % 2 ? style.ring : style.fill, 0.8 * fade);
           g.beginPath();
           g.arc(0, 0, rr, a0, a0 + 1.9);
           g.strokePath();
         }
         if (z.kind === 'tornade') {
-          g.fillStyle(0xfff0a0, 0.7 * fade);
-          g.fillCircle(0, 0, r * 0.22);
+          g.fillStyle(0xfff0a0, 0.75 * fade);
+          g.fillCircle(0, 0, r * 0.24);
         } else {
           // Lignes d'aspiration vers le centre
           for (let i = 0; i < 8; i++) {
@@ -165,14 +188,6 @@ export class ZoneLayer {
         }
         break;
       }
-      case 'blizzard':
-        for (let i = 0; i < 22; i++) {
-          const a = seeded(i, 1) * TAU + t * 1.6;
-          const d = r * Math.sqrt((seeded(i, 2) + t * 0.25) % 1);
-          g.fillStyle(0xffffff, 0.85 * fade);
-          g.fillCircle(Math.cos(a) * d, Math.sin(a) * d, 2 + 2.5 * seeded(i, 3));
-        }
-        break;
       case 'sable':
         for (let i = 0; i < 5; i++) {
           const a0 = t * 2.6 + (i / 5) * TAU;
@@ -196,24 +211,6 @@ export class ZoneLayer {
             g.lineTo(Math.cos(a) * d, Math.sin(a) * d);
           }
           g.strokePath();
-        }
-        break;
-      case 'source':
-        // Petites croix de soin qui montent
-        for (let i = 0; i < 6; i++) {
-          const k = (t * 0.6 + seeded(i, 1)) % 1;
-          const x = (seeded(i, 2) - 0.5) * r * 1.3;
-          const y = (seeded(i, 3) - 0.5) * r * 1.1 - k * 30;
-          g.fillStyle(0xd6ffe9, (1 - k) * 0.9 * fade);
-          g.fillRect(x - 7, y - 2, 14, 4);
-          g.fillRect(x - 2, y - 7, 4, 14);
-        }
-        break;
-      case 'marecage':
-        for (let i = 0; i < 9; i++) {
-          const k = (t * 0.5 + seeded(i, 1)) % 1;
-          g.fillStyle(0x9bb84f, (1 - k) * 0.7 * fade);
-          g.fillCircle((seeded(i, 2) - 0.5) * r * 1.4, (seeded(i, 3) - 0.5) * r * 1.4, 4 + k * 9);
         }
         break;
       case 'brasier':
@@ -268,14 +265,14 @@ export class StrikeLayer {
 // ── Cristaux ─────────────────────────────────────────────────
 
 export class CrystalLayer {
-  constructor(scene, crystals) {
+  constructor(scene, crystals, effects) {
     this.scene = scene;
+    this.effects = effects;
     this.views = crystals.map((c) => {
       const glow = scene.add.image(c.x, c.y, 'dot').setDepth(DEPTH.crystal).setTint(COLORS.crystal).setBlendMode('ADD');
-      const g = scene.add.graphics().setDepth(DEPTH.crystal + 0.1);
-      drawCrystal(g, 17, COLORS.crystal, COLORS.crystalDark);
+      const img = scene.add.image(c.x, c.y, 'fx', 'crystal').setDepth(DEPTH.crystal + 0.1).setScale(0.74 / FX_SCALE);
       const label = addText(scene, c.x, c.y, '', {
-        size: 16,
+        size: 17,
         color: '#bffcff',
         ox: 0.5,
         oy: 0.5,
@@ -283,41 +280,52 @@ export class CrystalLayer {
         strokeW: 4,
         depth: DEPTH.crystal + 0.2,
       });
-      return { c, g, glow, label, shown: '' };
+      return { c, img, glow, label, shown: '', spark: Math.random() };
     });
   }
 
-  update(time, matchTime) {
+  update(time, matchTime, dt) {
     for (const v of this.views) {
       const c = v.c;
       if (!c.active) {
         // Pas encore apparu : silhouette + compte à rebours
         const left = Math.ceil(c.spawnAt - matchTime);
-        v.g.setVisible(true).setPosition(c.x, c.y).setAlpha(0.22).setScale(0.9);
+        v.img.setVisible(true).setPosition(c.x, c.y - 6).setAlpha(0.25).setTint(0x224455);
         v.glow.setVisible(false);
         const txt = left > 0 ? String(left) : '';
         if (txt !== v.shown) {
           v.shown = txt;
           v.label.setText(txt);
         }
-        v.label.setVisible(true).setPosition(c.x, c.y);
+        v.label.setVisible(true).setPosition(c.x, c.y - 4);
         continue;
       }
       v.label.setVisible(false);
       if (c.carrierId >= 0) {
         // Porté : c'est l'icône au-dessus du porteur qui l'indique
-        v.g.setVisible(false);
+        v.img.setVisible(false);
         v.glow.setVisible(false);
         continue;
       }
-      const bob = Math.sin(time * 0.005 + c.id * 2) * 4;
+      const bob = Math.sin(time * 0.005 + c.id * 2) * 5;
       const pulse = 0.5 + 0.5 * Math.sin(time * 0.006 + c.id);
-      v.g.setVisible(true).setPosition(c.x, c.y - 6 + bob).setAlpha(1).setScale(1);
+      v.img
+        .setVisible(true)
+        .clearTint()
+        .setPosition(c.x, c.y - 10 + bob)
+        .setAlpha(1)
+        .setRotation(Math.sin(time * 0.003 + c.id) * 0.08);
       v.glow
         .setVisible(true)
-        .setPosition(c.x, c.y - 4)
-        .setDisplaySize(90 + pulse * 30, 90 + pulse * 30)
-        .setAlpha(0.45 + 0.25 * pulse);
+        .setPosition(c.x, c.y - 6)
+        .setDisplaySize(84 + pulse * 26, 84 + pulse * 26)
+        .setAlpha(0.3 + 0.2 * pulse);
+      // Petits éclats scintillants
+      v.spark -= dt;
+      if (v.spark <= 0) {
+        v.spark = 0.25 + Math.random() * 0.4;
+        this.effects.burst('shard', c.x + (Math.random() - 0.5) * 30, c.y - 10 + (Math.random() - 0.5) * 40, 1);
+      }
     }
   }
 }

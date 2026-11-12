@@ -83,12 +83,12 @@ async function main() {
 
   // Choisir Alizé (5ᵉ carte) puis JOUER, au doigt
   let b = await buttons('Menu');
-  assert.equal(b.length, 11, '3 difficultés + son + aide + 5 personnages + JOUER');
-  await page.touchscreen.tap(b[9].x, b[9].y);
-  await sleep(300);
+  assert.equal(b.length, 12, 'aide + musique + sons + 3 difficultés + 5 personnages + JOUER');
+  await page.touchscreen.tap(b[10].x, b[10].y);
+  await sleep(400);
   assert.equal(await ev(() => window.__ELEMENTA__.game.scene.getScene('Menu').selected), 'alize');
   b = await buttons('Menu');
-  await page.touchscreen.tap(b[10].x, b[10].y);
+  await page.touchscreen.tap(b[11].x, b[11].y);
   await sleep(600);
   assert.deepEqual(await scenes(), ['Game', 'Hud']);
   assert.equal((await player()).charId, 'alize');

@@ -6,9 +6,9 @@ import * as Phaser from 'phaser';
 import { CHARACTERS } from '../config/characters.js';
 import { CRYSTAL } from '../config/constants.js';
 import { ELEMENTS, TEAM_COLORS } from '../config/elements.js';
+import { CharacterRig } from '../render/CharacterRig.js';
 import { Buttons } from '../ui/Buttons.js';
-import { drawCharacter } from '../ui/shapes.js';
-import { COLORS, addText, hex, textResFor } from '../ui/theme.js';
+import { COLORS, addText, fitWidth, hex, textResFor } from '../ui/theme.js';
 import { fitCamera } from '../ui/viewport.js';
 
 const REF_W = 844;
@@ -24,6 +24,7 @@ export class ResultScene extends Phaser.Scene {
   }
 
   create() {
+    this.rigs = [];
     this.buttons = new Buttons(this);
     this.rebuild();
     this.onViewport = () => this.rebuild();
@@ -31,9 +32,32 @@ export class ResultScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.game.events.off('viewport-changed', this.onViewport));
   }
 
+  update(time, delta) {
+    const dt = Math.min(0.05, delta / 1000);
+    const t = time / 1000;
+    for (const r of this.rigs) {
+      // Les vainqueurs sautent de joie, les perdants regardent leurs pieds
+      const hop = r.happy ? Math.abs(Math.sin(t * 5 + r.phase)) * r.jump : 0;
+      r.rig.setPosition(r.x, r.y - hop);
+      r.rig.update(dt, {
+        aim: r.happy ? Math.PI / 2 + Math.sin(t * 2 + r.phase) * 0.9 : Math.PI / 2,
+        moveX: 0,
+        moveY: 0,
+      });
+    }
+  }
+
+  addRig(id, x, y, scale, happy, jump) {
+    const rig = new CharacterRig(this, id, scale);
+    rig.setPosition(x, y).setDepth(5);
+    this.rigs.push({ rig, x, y, happy, jump, phase: this.rigs.length * 1.3 });
+    return rig;
+  }
+
   rebuild() {
     this.tweens.killAll();
     this.children.removeAll(true);
+    this.rigs = [];
     this.buttons.clear();
     const zoom = fitCamera(this, REF_W, REF_H);
     this.textRes = textResFor(zoom);
@@ -45,10 +69,35 @@ export class ResultScene extends Phaser.Scene {
     const accent = draw ? 0xffffff : win ? COLORS.gold : TEAM_COLORS[1].main;
 
     // Fond
-    const bg = this.add.graphics();
-    bg.fillStyle(COLORS.bg, 1);
+    const bg = this.add.graphics().setDepth(-10);
+    bg.fillGradientStyle(0x16224a, 0x16224a, 0x0a0f22, 0x0a0f22, 1);
     bg.fillRect(-3000, -3000, 6844, 6390);
-    this.add.image(REF_W / 2, 40, 'dot').setTint(accent).setAlpha(0.3).setDisplaySize(900, 420).setBlendMode('ADD');
+    this.add.image(REF_W / 2, 40, 'dot').setTint(accent).setAlpha(0.32).setDisplaySize(900, 420).setBlendMode('ADD').setDepth(-9);
+
+    // Le personnage du joueur, à côté du titre
+    const me = fighters.find((f) => f.isPlayer);
+    if (me) {
+      this.addRig(me.charId, 150, 58, 1.0, win, 9);
+      this.addRig(me.charId, REF_W - 150, 58, 1.0, win, 9);
+    }
+    // Confettis de victoire
+    if (win) {
+      this.add
+        .particles(0, 0, 'fx', {
+          frame: 'confetti',
+          x: { min: 0, max: REF_W },
+          y: -20,
+          lifespan: 4200,
+          speedY: { min: 90, max: 190 },
+          speedX: { min: -40, max: 40 },
+          rotate: { start: 0, end: 540 },
+          scale: { min: 0.35, max: 0.6 },
+          tint: [0xff5533, 0x2f9bff, 0xffd400, 0x52e0b8, 0xffffff, 0xff7bf0],
+          frequency: 55,
+          advance: 1500,
+        })
+        .setDepth(20);
+    }
 
     // Titre
     const title = addText(this, REF_W / 2, 38, draw ? 'ÉGALITÉ' : win ? 'VICTOIRE !' : 'DÉFAITE', {
@@ -127,10 +176,8 @@ export class ResultScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.07);
         g.fillRoundedRect(x + 8, ry - 20, w - 16, 40, 10);
       }
-      const icon = this.add.graphics();
-      drawCharacter(icon, def.shape, 14, el.color, f.isPlayer ? 0xffffff : col.main, 2.5, el.light);
-      icon.setPosition(x + 32, ry).setRotation(-Math.PI / 2);
-      addText(this, x + 58, ry - 7, def.name + (f.isPlayer ? ' (toi)' : ''), { size: 14, oy: 0.5 });
+      this.addRig(f.charId, x + 32, ry - 3, 0.5, result.winner === team, 4);
+      fitWidth(addText(this, x + 58, ry - 7, def.name + (f.isPlayer ? ' (toi)' : ''), { size: 14, oy: 0.5 }), 126);
       addText(this, x + 58, ry + 10, `${el.name} · ${def.role}`, { size: 10, oy: 0.5, color: hex(el.light), bold: false });
       addText(this, cols[0], ry, `${f.kills}`, { size: 15, ox: 0.5, oy: 0.5 });
       addText(this, cols[1], ry, `${f.damage}`, {

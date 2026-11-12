@@ -1,5 +1,7 @@
 // Thème visuel partagé par toutes les scènes (couleurs, police, textes nets).
-export const FONT = '"Arial Rounded MT Bold", "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif';
+// Fredoka est embarquée dans le jeu (voir main.js) : le rendu des textes est
+// donc identique sur tous les appareils, iPhone compris, même hors ligne.
+export const FONT = 'Fredoka, "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif';
 
 export const COLORS = {
   bg: 0x0b1020,
@@ -42,7 +44,7 @@ export function addText(scene, x, y, str, opts = {}) {
   const style = {
     fontFamily: FONT,
     fontSize: `${opts.size || 14}px`,
-    fontStyle: opts.bold === false ? 'normal' : 'bold',
+    fontStyle: opts.bold === false ? '500' : '700',
     color: opts.color || '#ffffff',
     align: opts.align || 'left',
     padding: { x: 2, y: 2 },
@@ -59,6 +61,16 @@ export function addText(scene, x, y, str, opts = {}) {
   if (opts.depth != null) t.setDepth(opts.depth);
   if (opts.alpha != null) t.setAlpha(opts.alpha);
   return t;
+}
+
+/**
+ * Rétrécit un texte s'il dépasse `maxWidth` (aucun chevauchement possible,
+ * quelle que soit la langue ou la police).
+ */
+export function fitWidth(text, maxWidth) {
+  text.setScale(1);
+  if (text.width > maxWidth) text.setScale(maxWidth / text.width);
+  return text;
 }
 
 /** Résolution de texte adaptée à un zoom de caméra (plafonnée pour la mémoire). */

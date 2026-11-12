@@ -3,8 +3,9 @@
 Brawler élémentaire **3 contre 3** vu de dessus, pensé pour mobile (paysage, plein écran, tactile).
 Jeu web en JavaScript avec **Phaser 3**, installable sur l'écran d'accueil (PWA) et optimisé pour iPhone.
 
-> Prototype jouable — personnages en formes géométriques, bots pour alliés et ennemis.
-> Tout est original : noms, personnages, visuels (dessinés par le code) et sons (synthétisés par le code).
+> Personnages cartoon animés, décor peint, particules par élément, musique et bruitages :
+> **tout est original et fabriqué par le code** (aucun fichier image ni audio). Les personnages et le décor sont
+> dessinés au démarrage (Canvas 2D), la musique est composée et jouée en direct (Web Audio).
 
 ---
 
@@ -35,11 +36,16 @@ Jeu web en JavaScript avec **Phaser 3**, installable sur l'écran d'accueil (PWA
 
 | Personnage | Élément | Rôle | PV | Vitesse | Portée | Attaque | Super |
 |---|---|---|---|---|---|---|---|
-| **Braz** ▲ | Feu | Attaquant | 3600 | 215 | 6,6 cases | *Salve ardente* — 3 boules de feu en éventail | *Boule de magma* — explose et laisse un brasier |
-| **Ondine** ● | Eau | Soutien | 3300 | 215 | 8,4 cases | *Trait d'eau* — traverse les ennemis | *Source vive* — zone qui soigne les alliés et ralentit les ennemis |
-| **Dolmen** ■ | Terre | Tank | 5200 | 190 | 3,7 cases | *Éclats de roc* — 5 éclats à courte portée | *Charge de granit* — fonce, étourdit et se protège |
-| **Volta** ◆ | Foudre | Tireuse | 2800 | 235 | 9,1 cases | *Arc voltaïque* — éclair qui rebondit sur un 2ᵉ ennemi | *Coup de tonnerre* — rayon instantané qui transperce et étourdit |
-| **Alizé** ⬟ | Vent | Éclaireuse | 3000 | 250 | 7,0 cases | *Lames de vent* — 2 lames rapides | *Bourrasque* — repousse, dissipe les tirs et accélère |
+| **Braz** | Feu | Attaquant | 3600 | 215 | 6,6 cases | *Salve ardente* — 3 boules de feu en éventail | *Boule de magma* — explose et laisse un brasier |
+| **Ondine** | Eau | Soutien | 3300 | 215 | 8,4 cases | *Trait d'eau* — traverse les ennemis | *Source vive* — zone qui soigne les alliés et ralentit les ennemis |
+| **Dolmen** | Terre | Tank | 5200 | 190 | 3,7 cases | *Éclats de roc* — 5 éclats à courte portée | *Charge de granit* — fonce, étourdit et se protège |
+| **Volta** | Foudre | Tireuse | 2800 | 235 | 9,1 cases | *Arc voltaïque* — éclair qui rebondit sur un 2ᵉ ennemi | *Coup de tonnerre* — rayon instantané qui transperce et étourdit |
+| **Alizé** | Vent | Éclaireuse | 3000 | 250 | 7,0 cases | *Lames de vent* — 2 lames rapides | *Bourrasque* — repousse, dissipe les tirs et accélère |
+
+À quoi ils ressemblent : **Braz**, petit forgeron à la chevelure de flammes et son canon à braises ; **Ondine**,
+esprit des sources à la capuche en goutte d'eau, avec son bâton de corail ; **Dolmen**, golem de pierre moussue
+aux poings énormes ; **Volta**, inventrice aux cheveux en éclairs et lunettes d'aviatrice ; **Alizé**, coursière
+du vent à la longue écharpe, armée d'un éventail.
 
 ### Table des fusions (les 10 paires)
 
@@ -65,7 +71,7 @@ déclenchent aussi leurs propres fusions.
 
 | Événement | Effet |
 |---|---|
-| **Coulée de lave** | Des cases s'embrasent (elles clignotent d'abord) et brûlent ceux qui marchent dessus |
+| **Coulée de lave** | Quelques petites flaques s'embrasent (elles clignotent d'abord) et brûlent ceux qui marchent dessus |
 | **Brouillard** | Vision réduite à un cercle autour de soi (les porteurs de cristaux restent visibles) |
 | **Murs mobiles** | Des murs coulissent le long des rails en pointillés |
 | **Orage** | La foudre tombe dans des cercles annoncés une seconde avant |
@@ -121,6 +127,10 @@ La branche de production se choisit dans *Settings → Environments → Producti
 5. Tiens le téléphone **en paysage** (si le verrouillage de rotation est activé dans le centre de contrôle, désactive-le).
 
 Une fois ouvert une première fois, le jeu fonctionne aussi **hors ligne**.
+
+**Mises à jour** : après un nouveau déploiement, le jeu se recharge tout seul quand tu reviens dans le menu
+(jamais en plein match). Si tu vois encore l'ancienne version, ferme complètement l'application
+(balaye-la vers le haut dans le sélecteur d'apps) puis rouvre-la.
 Sur Android (Chrome) : menu ⋮ → *Installer l'application* / *Ajouter à l'écran d'accueil*.
 
 Ce qui est géré pour l'iPhone :
@@ -163,11 +173,18 @@ src/
 │   ├── ArenaDirector.js  déroulement des événements d'arène
 │   ├── BotAI.js        intelligence des bots (3 niveaux)
 │   └── pathfinding.js  recherche de chemin A*
+├── art/                LES DESSINS, faits par le code (Canvas 2D)
+│   ├── characterArt.js les 5 personnages, en pièces séparées (tête, corps, arme…)
+│   ├── mapArt.js       sol (herbe, dallage, fleurs), murs de pierre, buissons
+│   └── fxArt.js        particules, projectiles, emblèmes des éléments, cristal
 ├── scenes/             écrans Phaser : Boot, Menu, Game, Hud, Result
-├── render/             affichage de la simulation (arène, combattants, effets)
+├── render/             affichage de la simulation
+│   ├── CharacterRig.js pantin animé : marche, tir, clignement, mort…
+│   ├── Effects.js      particules par élément, ondes de choc, animation de fusion
+│   └── …               arène, combattants, projectiles, zones
 ├── ui/                 écran (zones sûres, redimensionnement), boutons, thème
-├── audio/Sfx.js        sons synthétisés (Web Audio)
-└── pwa/                service worker (hors ligne)
+├── audio/              Sfx.js (bruitages) et Music.js (musique), synthétisés
+└── pwa/                service worker (hors ligne, mises à jour)
 ```
 
 ### Deux couches bien séparées
@@ -186,7 +203,10 @@ src/
 | changer les PV / dégâts / vitesse d'un personnage | `src/config/characters.js` |
 | modifier une fusion | `src/config/fusions.js` |
 | changer la durée du match, le délai de réapparition, l'apparition des cristaux | `src/config/constants.js` |
-| redessiner la carte | `src/config/maps.js` |
+| redessiner la carte | `src/config/maps.js` (le décor se repeint tout seul) |
+| changer l'apparence d'un personnage | `src/art/characterArt.js` |
+| régler la caméra (zoom) | `VIEW` dans `src/config/constants.js` |
+| modifier la musique | `TRACKS` dans `src/audio/Music.js` |
 | rendre les bots plus ou moins forts | `BOT_SKILL` dans `src/sim/BotAI.js` |
 
 Note de conception : les 3 cristaux apparaissent **l'un après l'autre** (0 s, 20 s, 40 s).
@@ -205,5 +225,5 @@ duraient une trentaine de secondes. Pour revenir à ce réglage : `spawnTimes: [
 
 ## Et ensuite ?
 
-Idées pour les prochaines étapes : multijoueur en ligne, vrais graphismes et animations, nouvelles cartes,
+Idées pour les prochaines étapes : multijoueur en ligne, nouvelles cartes, nouveaux personnages,
 progression (niveaux, déblocages), choix des coéquipiers, tutoriel interactif.

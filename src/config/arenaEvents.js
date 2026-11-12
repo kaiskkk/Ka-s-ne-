@@ -9,8 +9,8 @@ export const ARENA_EVENTS = {
     hint: 'Le sol s’embrase : évitez les cases rouges !',
     color: 0xff5a1f,
     dps: 450,
-    blobs: 5, // nombre de flaques par moitié de carte
-    blobSize: [4, 7],
+    blobs: 2, // nombre de flaques par moitié de carte (peu de lave : la carte reste lisible)
+    blobSize: [3, 4],
   },
   brouillard: {
     id: 'brouillard',

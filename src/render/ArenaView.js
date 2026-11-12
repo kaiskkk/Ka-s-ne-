@@ -1,22 +1,23 @@
 // ─────────────────────────────────────────────────────────────
-//  ArenaView — dessine l'arène : sol, murs, buissons, rails,
-//  et les éléments dynamiques (lave, murs mobiles).
+//  ArenaView — affiche l'arène.
+//  Le sol, les murs et les buissons sont des textures peintes au démarrage
+//  (art/mapArt.js). Seuls la lave et les murs mobiles sont animés ici.
 // ─────────────────────────────────────────────────────────────
+import { GROUND_SCALE } from '../art/mapArt.js';
 import { TILE } from '../config/constants.js';
-import { TEAM_COLORS } from '../config/elements.js';
-import { LAVA_ON, LAVA_WARN, T_BUSH, T_WALL } from '../sim/Arena.js';
+import { LAVA_ON, LAVA_WARN } from '../sim/Arena.js';
 import { lerp } from '../sim/mathx.js';
 
 export const DEPTH = {
   floor: 0,
-  ground: 2, // lave, rails
+  ground: 2, // lave
   zone: 3, // zones au sol
   strike: 4,
   crystal: 5,
   wall: 6,
   aim: 8,
   shadow: 9,
-  fighter: 10,
+  fighter: 10, // + un petit décalage selon y (les persos du bas passent devant)
   projectile: 12,
   bush: 16,
   cloud: 20, // nuages, tornades, explosions
@@ -25,27 +26,6 @@ export const DEPTH = {
   number: 45,
 };
 
-const C = {
-  outside: 0x070a14,
-  floorA: 0x232c48,
-  floorB: 0x27314f,
-  line: 0x35406a,
-  wallTop: 0x7783a8,
-  wallFront: 0x4a5475,
-  wallEdge: 0x9aa6c8,
-  borderTop: 0x3d4767,
-  borderFront: 0x2a3250,
-  bush: 0x2f9e58,
-  bushLight: 0x55c878,
-  bushDark: 0x1f7a40,
-  rail: 0x5a67a8,
-  mover: 0x9aa7ff,
-  moverFront: 0x5b66b8,
-  lava: 0xff4a12,
-  lavaHot: 0xffb13a,
-};
-
-/** Petit générateur déterministe pour placer les détails décoratifs. */
 function hash(c, r, k = 0) {
   let h = (c * 374761393 + r * 668265263 + k * 2147483647) | 0;
   h = (h ^ (h >>> 13)) * 1274126177;
@@ -57,206 +37,129 @@ export class ArenaView {
     this.scene = scene;
     this.arena = arena;
 
-    this.floor = scene.add.graphics().setDepth(DEPTH.floor);
+    // Au-delà de l'arène (visible seulement sur les écrans très larges)
+    scene.add
+      .rectangle(arena.width / 2, arena.height / 2, arena.width + 5000, arena.height + 5000, 0x263326)
+      .setDepth(DEPTH.floor - 1);
+    this.ground = scene.add
+      .image(0, 0, 'ground')
+      .setOrigin(0, 0)
+      .setScale(1 / GROUND_SCALE)
+      .setDepth(DEPTH.floor);
+
     this.lavaG = scene.add.graphics().setDepth(DEPTH.ground);
-    this.walls = scene.add.graphics().setDepth(DEPTH.wall);
-    this.moversG = scene.add.graphics().setDepth(DEPTH.wall);
-    this.bushes = scene.add.graphics().setDepth(DEPTH.bush).setAlpha(0.8);
 
-    this.drawFloor();
-    this.drawWalls();
-    this.drawBushes();
+    this.moverImgs = arena.movers.map((m) =>
+      scene.add.image(0, 0, `mover_${m.w}x${m.h}`).setOrigin(0, 0).setScale(0.5).setDepth(DEPTH.wall).setVisible(false),
+    );
+
+    // Massifs de buissons : par-dessus les personnages
+    this.bushes = (scene.registry.get('bushes') || []).map((b) => ({
+      ...b,
+      img: scene.add.image(b.x, b.y, b.key).setScale(b.scale).setDepth(DEPTH.bush),
+      alpha: 1,
+      rustle: 0,
+    }));
   }
 
-  drawFloor() {
-    const { arena } = this;
-    const g = this.floor;
-    // Extérieur de l'arène (visible seulement sur les écrans très larges)
-    g.fillStyle(C.outside, 1);
-    g.fillRect(-2000, -2000, arena.width + 4000, arena.height + 4000);
-    // Damier discret : un grand rectangle, puis seulement une case sur deux
-    // (deux fois moins de formes à dessiner à chaque image).
-    g.fillStyle(C.floorA, 1);
-    g.fillRect(0, 0, arena.width, arena.height);
-    g.fillStyle(C.floorB, 1);
-    for (let r = 1; r < arena.rows - 1; r++) {
-      for (let c = 1; c < arena.cols - 1; c++) {
-        if ((c + r) % 2 === 1) g.fillRect(c * TILE, r * TILE, TILE, TILE);
-      }
+  /** Le massif de buissons qui contient le point (x, y), ou null. */
+  bushAt(x, y) {
+    const c = Math.floor(x / TILE);
+    const r = Math.floor(y / TILE);
+    for (const b of this.bushes) {
+      if (c >= b.c && c < b.c + b.w && r >= b.r && r < b.r + b.h) return b;
     }
-    // Zones de base teintées aux couleurs des équipes
-    const baseW = 4 * TILE;
-    g.fillStyle(TEAM_COLORS[0].main, 0.1);
-    g.fillRect(TILE, TILE, baseW - TILE, arena.height - 2 * TILE);
-    g.fillStyle(TEAM_COLORS[1].main, 0.1);
-    g.fillRect(arena.width - baseW, TILE, baseW - TILE, arena.height - 2 * TILE);
-    // Ligne et cercle centraux
-    const cx = arena.width / 2;
-    const cy = arena.height / 2;
-    g.lineStyle(3, C.line, 0.9);
-    g.lineBetween(cx, TILE, cx, arena.height - TILE);
-    g.strokeCircle(cx, cy, TILE * 2.6);
-    // Points d'apparition
-    for (let team = 0; team < 2; team++) {
-      for (const s of arena.spawns[team]) {
-        g.lineStyle(3, TEAM_COLORS[team].main, 0.55);
-        g.strokeCircle(s.x, s.y, 30);
-        g.fillStyle(TEAM_COLORS[team].main, 0.16);
-        g.fillCircle(s.x, s.y, 30);
-      }
-    }
-    // Socles des cristaux
-    for (const p of arena.crystalSpawns) {
-      g.fillStyle(0x7df9ff, 0.12);
-      g.fillCircle(p.x, p.y, 26);
-      g.lineStyle(2, 0x7df9ff, 0.45);
-      g.strokeCircle(p.x, p.y, 26);
-    }
-    // Rails des murs mobiles (pointillés)
-    for (const m of arena.movers) {
-      const x0 = m.ax + m.w / 2;
-      const y0 = m.ay + m.h / 2;
-      const x1 = m.bx + m.w / 2;
-      const y1 = m.by + m.h / 2;
-      const len = Math.hypot(x1 - x0, y1 - y0);
-      const n = Math.max(1, Math.round(len / 28));
-      g.fillStyle(C.rail, 0.55);
-      for (let i = 0; i <= n; i++) {
-        const t = i / n;
-        g.fillRect(lerp(x0, x1, t) - 5, lerp(y0, y1, t) - 5, 10, 10);
-      }
-    }
+    return null;
   }
 
-  drawWalls() {
+  /**
+   * @param {Array} visible  combattants que le joueur voit : [{ f, friendly }]
+   */
+  update(time, alpha, dt, visible) {
     const { arena } = this;
-    const g = this.walls;
-    const front = 12; // hauteur de la « face avant » (fausse 3D)
-    const { width, height, cols, rows } = arena;
 
-    // Mur d'enceinte : 4 grands rectangles plutôt qu'une centaine de cases
-    g.fillStyle(C.borderTop, 1);
-    g.fillRect(0, 0, width, TILE); // haut
-    g.fillRect(0, height - TILE, width, TILE); // bas
-    g.fillRect(0, TILE, TILE, height - 2 * TILE); // gauche
-    g.fillRect(width - TILE, TILE, TILE, height - 2 * TILE); // droite
-    g.fillStyle(C.borderFront, 1);
-    g.fillRect(TILE, TILE - front, width - 2 * TILE, front); // face avant du mur du haut
-
-    // Murs intérieurs
-    for (let r = 1; r < rows - 1; r++) {
-      for (let c = 1; c < cols - 1; c++) {
-        if (arena.tileType(c, r) !== T_WALL) continue;
-        const x = c * TILE;
-        const y = r * TILE;
-        const below = arena.tileType(c, r + 1) === T_WALL && r + 1 < rows - 1;
-        if (!below) {
-          g.fillStyle(C.wallFront, 1);
-          g.fillRect(x, y + TILE - front, TILE, front);
-        }
-        g.fillStyle(C.wallTop, 1);
-        g.fillRect(x, y, TILE, below ? TILE : TILE - front);
-        // Liseré clair en haut (seulement si la case du dessus est libre)
-        if (arena.tileType(c, r - 1) !== T_WALL || r - 1 === 0) {
-          g.fillStyle(C.wallEdge, 1);
-          g.fillRect(x, y, TILE, 4);
-        }
-        // Petites fissures décoratives
-        g.fillStyle(C.wallFront, 0.5);
-        g.fillRect(x + 10 + hash(c, r) * 30, y + 14 + hash(c, r, 1) * 20, 12, 3);
-      }
+    // ── Buissons : s'estompent quand un allié est dedans, frémissent quand on y bouge ──
+    for (const b of this.bushes) {
+      b.inside = false;
     }
-  }
-
-  drawBushes() {
-    const { arena } = this;
-    const g = this.bushes;
-    for (let r = 0; r < arena.rows; r++) {
-      for (let c = 0; c < arena.cols; c++) {
-        if (arena.tileType(c, r) !== T_BUSH) continue;
-        const x = c * TILE;
-        const y = r * TILE;
-        g.fillStyle(C.bushDark, 1);
-        g.fillRoundedRect(x - 3, y - 3, TILE + 6, TILE + 6, 14);
-        g.fillStyle(C.bush, 1);
-        g.fillRoundedRect(x + 1, y + 1, TILE - 2, TILE - 6, 12);
-        // Quelques touffes plus claires
-        g.fillStyle(C.bushLight, 1);
-        for (let k = 0; k < 4; k++) {
-          g.fillCircle(x + 12 + hash(c, r, k) * 40, y + 12 + hash(c, r, k + 7) * 36, 5 + hash(c, r, k + 3) * 4);
-        }
-      }
+    for (const v of visible) {
+      const f = v.f;
+      if (!f.alive || !f.inBush) continue;
+      const b = this.bushAt(f.x, f.y);
+      if (!b) continue;
+      if (v.friendly) b.inside = true;
+      if (Math.abs(f.vx) + Math.abs(f.vy) > 40) b.rustle = 1;
     }
-  }
+    for (const b of this.bushes) {
+      b.alpha = lerp(b.alpha, b.inside ? 0.62 : 1, Math.min(1, dt * 10));
+      b.rustle = Math.max(0, b.rustle - dt * 2.5);
+      const wob = Math.sin(time * 0.03) * 0.025 * b.rustle;
+      b.img.setAlpha(b.alpha).setScale(b.scale * (1 + wob), b.scale * (1 - wob));
+    }
 
-  /** Éléments animés : lave et murs mobiles. `alpha` = interpolation entre deux pas. */
-  update(time, alpha) {
-    const { arena } = this;
-
-    // Lave
+    // ── Lave ──
     const lg = this.lavaG;
     lg.clear();
     const pulse = 0.5 + 0.5 * Math.sin(time * 0.008);
-    for (let i = 0; i < arena.lava.length; i++) {
-      const state = arena.lava[i];
-      if (state === 0) continue;
-      const c = i % arena.cols;
-      const r = (i - c) / arena.cols;
-      const x = c * TILE;
-      const y = r * TILE;
-      if (state === LAVA_WARN) {
-        // Avertissement : la case clignote
-        lg.fillStyle(C.lava, 0.12 + 0.2 * pulse);
-        lg.fillRect(x, y, TILE, TILE);
-        lg.lineStyle(3, C.lavaHot, 0.5 + 0.5 * pulse);
-        lg.strokeRect(x + 3, y + 3, TILE - 6, TILE - 6);
-      } else if (state === LAVA_ON) {
-        lg.fillStyle(C.lava, 0.92);
-        lg.fillRect(x, y, TILE, TILE);
-        lg.fillStyle(C.lavaHot, 0.55 + 0.3 * Math.sin(time * 0.005 + c * 1.7 + r));
-        lg.fillCircle(x + 20 + hash(c, r) * 24, y + 20 + hash(c, r, 1) * 24, 9 + hash(c, r, 2) * 6);
-        lg.fillStyle(0xfff0a0, 0.5 + 0.3 * Math.sin(time * 0.007 + c + r * 2.3));
-        lg.fillCircle(x + 14 + hash(c, r, 3) * 36, y + 14 + hash(c, r, 4) * 36, 4);
-      }
-    }
-
-    // Murs mobiles
-    const mg = this.moversG;
-    mg.clear();
-    for (const m of arena.movers) {
-      if (m.state === 'hidden') continue;
-      const x = lerp(m.px, m.x, alpha);
-      const y = lerp(m.py, m.y, alpha);
-      if (m.state === 'warning') {
-        mg.fillStyle(C.mover, 0.15 + 0.3 * pulse);
-        mg.fillRect(x, y, m.w, m.h);
-        mg.lineStyle(3, C.mover, 0.6 + 0.4 * pulse);
-        mg.strokeRect(x + 2, y + 2, m.w - 4, m.h - 4);
-      } else {
-        mg.fillStyle(C.moverFront, 1);
-        mg.fillRect(x, y, m.w, m.h);
-        mg.fillStyle(C.mover, 1);
-        mg.fillRect(x, y, m.w, m.h - 12);
-        mg.fillStyle(0xffffff, 0.85);
-        mg.fillRect(x, y, m.w, 4);
-        // Chevrons indiquant le sens de déplacement
-        const horizontal = m.ay === m.by;
-        const dir = (m.bx - m.ax + (m.by - m.ay) > 0 ? 1 : -1) * m.dir;
-        const cx = x + m.w / 2;
-        const cy = y + (m.h - 12) / 2;
-        mg.fillStyle(0x2b3170, 0.9);
-        for (const off of [-12, 6]) {
-          if (horizontal) {
-            mg.fillTriangle(cx + (off + 12) * dir, cy, cx + off * dir, cy - 9, cx + off * dir, cy + 9);
+    const isLava = (c, r, state) => arena.inBounds(c, r) && arena.lava[r * arena.cols + c] === state;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < arena.lava.length; i++) {
+        const state = arena.lava[i];
+        if (state === 0) continue;
+        const c = i % arena.cols;
+        const r = (i - c) / arena.cols;
+        const x = c * TILE;
+        const y = r * TILE;
+        // Coins arrondis seulement sur le pourtour de la flaque
+        const n = isLava(c, r - 1, state);
+        const s = isLava(c, r + 1, state);
+        const w = isLava(c - 1, r, state);
+        const e = isLava(c + 1, r, state);
+        const rad = { tl: n || w ? 0 : 20, tr: n || e ? 0 : 20, bl: s || w ? 0 : 20, br: s || e ? 0 : 20 };
+        if (state === LAVA_WARN) {
+          if (pass === 0) {
+            lg.fillStyle(0xff6a1f, 0.16 + 0.22 * pulse);
+            lg.fillRoundedRect(x, y, TILE, TILE, rad);
           } else {
-            mg.fillTriangle(cx, cy + (off + 12) * dir, cx - 9, cy + off * dir, cx + 9, cy + off * dir);
+            lg.fillStyle(0xfff0a0, 0.35 + 0.5 * pulse);
+            lg.fillCircle(x + TILE / 2, y + TILE / 2, 5 + pulse * 3);
+          }
+        } else if (state === LAVA_ON) {
+          if (pass === 0) {
+            // Croûte sombre qui déborde légèrement
+            lg.fillStyle(0x5a1a0a, 0.9);
+            lg.fillRoundedRect(x - 4, y - 4, TILE + 8, TILE + 8, 22);
+          } else {
+            lg.fillStyle(0xff4a12, 1);
+            lg.fillRoundedRect(x, y, TILE, TILE, rad);
+            lg.fillStyle(0xffa02a, 0.55 + 0.3 * Math.sin(time * 0.004 + c * 1.7 + r));
+            lg.fillCircle(x + 20 + hash(c, r) * 24, y + 20 + hash(c, r, 1) * 24, 12 + hash(c, r, 2) * 7);
+            lg.fillStyle(0xfff0a0, 0.55 + 0.35 * Math.sin(time * 0.007 + c + r * 2.3));
+            lg.fillCircle(x + 14 + hash(c, r, 3) * 36, y + 14 + hash(c, r, 4) * 36, 4.5);
+            // Bulle qui gonfle puis éclate
+            const k = (time * 0.0009 + hash(c, r, 5)) % 1;
+            lg.lineStyle(2.5, 0xfff0a0, 1 - k);
+            lg.strokeCircle(x + 12 + hash(c, r, 6) * 40, y + 12 + hash(c, r, 7) * 40, 2 + k * 8);
           }
         }
       }
     }
-  }
 
-  destroy() {
-    for (const g of [this.floor, this.lavaG, this.walls, this.moversG, this.bushes]) g.destroy();
+    // ── Murs mobiles ──
+    arena.movers.forEach((m, i) => {
+      const img = this.moverImgs[i];
+      if (m.state === 'hidden') {
+        img.setVisible(false);
+        return;
+      }
+      const horizontal = m.ay === m.by;
+      const forward = (horizontal ? m.bx - m.ax : m.by - m.ay) * m.dir > 0;
+      img
+        .setVisible(true)
+        .setPosition(lerp(m.px, m.x, alpha) - 4, lerp(m.py, m.y, alpha) - 4)
+        .setAlpha(m.state === 'warning' ? 0.3 + 0.4 * pulse : 1)
+        .setFlipX(horizontal && !forward)
+        .setFlipY(!horizontal && !forward);
+    });
   }
 }
